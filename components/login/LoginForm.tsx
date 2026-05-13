@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+
 import React, { useState } from "react";
 import { Label } from "../ui/label";
 import { Eye, EyeOff, Lock, Mail } from "lucide-react";
@@ -5,19 +8,39 @@ import { Input } from "../ui/input";
 import Link from "next/link";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import axios from "axios";
 
 const LoginForm = () => {
 	const [showPassword, setShowPassword] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
+	const router = useRouter();
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
+		if (!email || !password) {
+			toast.error("Please fill in both email and password.");
+			return;
+		}
+
 		setIsLoading(true);
-		// Simulate API call
-		await new Promise((r) => setTimeout(r, 1500));
-		setIsLoading(false);
+
+		try {
+			await axios.post("/api/auth/login", { email, password });
+
+			toast.success("Login successful!");
+			router.push("/feed");
+			router.refresh();
+		} catch (error: any) {
+			toast.error(
+				error.response?.data?.error || "Failed to login. Please try again.",
+			);
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	return (
