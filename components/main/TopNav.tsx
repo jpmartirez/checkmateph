@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Bell, Menu, Search, ShieldCheck } from "@/lib/icons/icons";
 import Image from "next/image";
+import Link from "next/link";
 
 interface TopNavProps {
 	onMenuClick: () => void;
@@ -27,13 +28,15 @@ const TopNav = ({ onMenuClick }: TopNavProps) => {
 						<Menu className="h-4 w-4" />
 					</Button>
 
-					<Image
-						src={"/checkmateph-logo.png"}
-						alt="logo"
-						width={35}
-						height={35}
-						className="shrink-0"
-					/>
+					<Link href="/">
+						<Image
+							src={"/checkmateph-logo.png"}
+							alt="logo"
+							width={35}
+							height={35}
+							className="shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+						/>
+					</Link>
 
 					<div className="flex flex-1 items-center justify-center">
 						<div className="flex h-9 w-full max-w-md items-center gap-2 rounded-full border border-(--border-subtle) bg-(--bg-tertiary) px-3 text-(--text-secondary)">
