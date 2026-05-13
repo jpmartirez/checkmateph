@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
 	Dialog,
 	DialogContent,
@@ -23,7 +23,7 @@ import {
 	BadgeCheck,
 } from "lucide-react";
 import { Post, PostCategory } from "./feed-types";
-import { v4 as uuidv4 } from "uuid";
+import { createClient } from "@/lib/supabase/client";
 
 interface SourceLink {
 	id: string;
@@ -49,6 +49,54 @@ export function CreatePostModal({
 	const [linkInput, setLinkInput] = useState("");
 	const [sources, setSources] = useState<SourceLink[]>([]);
 	const [certified, setCertified] = useState(false);
+	const [displayName, setDisplayName] = useState<string>("User");
+	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+	const initials = useMemo(() => {
+		const parts = displayName.trim().split(/\s+/).filter(Boolean);
+		if (parts.length === 0) return "U";
+		if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase();
+		return `${parts[0]!.slice(0, 1)}${parts[parts.length - 1]!.slice(0, 1)}`.toUpperCase();
+	}, [displayName]);
+
+	useEffect(() => {
+		let cancelled = false;
+		const supabase = createClient();
+		const run = async () => {
+			const { data } = await supabase.auth.getUser();
+			const user = data.user;
+			if (!user) return;
+
+			const meta =
+				typeof user.user_metadata === "object" && user.user_metadata !== null
+					? (user.user_metadata as Record<string, unknown>)
+					: {};
+			const metaDisplayName =
+				typeof meta.display_name === "string" ? meta.display_name : undefined;
+			const metaName = typeof meta.name === "string" ? meta.name : undefined;
+			const metaAvatarUrl =
+				typeof meta.avatar_url === "string" ? meta.avatar_url : undefined;
+
+			const { data: profile } = await supabase
+				.from("profiles")
+				.select("display_name, avatar_url")
+				.eq("id", user.id)
+				.single();
+
+			if (cancelled) return;
+			setDisplayName(
+				profile?.display_name ?? metaDisplayName ?? metaName ?? user.email ?? "User",
+			);
+			setAvatarUrl(
+				profile?.avatar_url ?? metaAvatarUrl ?? `https://i.pravatar.cc/150?u=${user.id}`,
+			);
+		};
+		run().catch(() => {
+			// ignore
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	// Reset form when modal opens
 	const handleOpenChange = (newOpen: boolean) => {
@@ -66,7 +114,7 @@ export function CreatePostModal({
 		if (!linkInput.trim()) return;
 		setSources([
 			...sources,
-			{ id: uuidv4(), title: linkInput, url: linkInput },
+			{ id: crypto.randomUUID(), title: linkInput, url: linkInput },
 		]);
 		setLinkInput("");
 	};
@@ -75,34 +123,39 @@ export function CreatePostModal({
 		setSources(sources.filter((s) => s.id !== id));
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		if (!content.trim()) return;
 
-		const newPost: Post = {
-			id: uuidv4(),
-			author: {
-				id: "me",
-				name: "Dave Capistrano",
-				avatarUrl: "https://i.pravatar.cc/150?u=dave",
-			},
-			timeAgo: "Just now",
-			category: intent,
-			status: intent === "CLAIM" ? ["UNDER_REVIEW"] : [],
-			contentText: content,
-			stats: {
-				reactions: 0,
-				comments: 0,
-				shares: 0,
-				references: sources.length,
-			},
-		};
+		try {
+			const response = await fetch("/api/posts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					category: intent as PostCategory,
+					contentText: content,
+					sources: sources.map((s) => ({ title: s.title, url: s.url })),
+				}),
+			});
 
-		onSubmit(newPost);
-		onOpenChange(false);
+			if (!response.ok) {
+				// Keep UX minimal: just log. Feed will stay unchanged.
+				const err = await response.json().catch(() => ({}));
+				console.error("Failed to create post", err);
+				return;
+			}
+
+			const data = (await response.json()) as { post?: Post };
+			if (data?.post) {
+				onSubmit(data.post);
+				onOpenChange(false);
+			}
+		} catch (e) {
+			console.error("Failed to create post", e);
+		}
 	};
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
+		<Dialog open={open} onOpenChange={handleOpenChange}>
 			<DialogContent className="w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-800 text-zinc-100 p-0 sm:rounded-2xl my-4 sm:my-8">
 				<div className="p-4 sm:p-6 md:p-8">
 					<DialogHeader className="mb-6 flex flex-row items-center justify-between">
@@ -112,11 +165,11 @@ export function CreatePostModal({
 					{/* User Info */}
 					<div className="flex items-center gap-3 mb-6">
 						<Avatar className="w-12 h-12">
-							<AvatarImage src="https://i.pravatar.cc/150?u=dave" />
-							<AvatarFallback>DC</AvatarFallback>
+							<AvatarImage src={avatarUrl ?? undefined} alt={displayName} />
+							<AvatarFallback>{initials}</AvatarFallback>
 						</Avatar>
 						<div>
-							<div className="font-semibold text-zinc-100">Dave Capistrano</div>
+							<div className="font-semibold text-zinc-100">{displayName}</div>
 							<div className="flex items-center gap-1 text-xs text-zinc-400 bg-zinc-800/50 px-2 py-1 rounded-md mt-1 w-fit border border-zinc-800">
 								<Globe className="w-3 h-3" />
 								Publicly visible

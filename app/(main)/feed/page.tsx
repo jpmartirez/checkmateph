@@ -1,12 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { CreatePostBox } from "@/components/main/feed/CreatePostBox";
 import { PostCard } from "@/components/main/feed/PostCard";
 import { RightSidebar } from "@/components/main/feed/RightSidebar";
 import { MOCK_POSTS } from "@/components/main/feed/feed-data";
 import { CreatePostModal } from "@/components/main/feed/CreatePostModal";
 import { Post } from "@/components/main/feed/feed-types";
+import axios from "axios";
 
 const FeedPage = () => {
 	const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
@@ -15,13 +16,31 @@ const FeedPage = () => {
 		"CLAIM",
 	);
 
+	useEffect(() => {
+		let isMounted = true;
+		axios
+			.get("/api/posts")
+			.then((res) => {
+				const apiPosts = res?.data?.posts as Post[] | undefined;
+				if (isMounted && Array.isArray(apiPosts)) {
+					setPosts(apiPosts);
+				}
+			})
+			.catch(() => {
+				// Keep MOCK_POSTS if the DB isn't set up yet.
+			});
+		return () => {
+			isMounted = false;
+		};
+	}, []);
+
 	const handleOpenModal = (intent: "OPINION" | "CLAIM" = "CLAIM") => {
 		setInitialIntent(intent);
 		setIsModalOpen(true);
 	};
 
 	const handleCreatePost = (newPost: Post) => {
-		setPosts([newPost, ...posts]);
+		setPosts((prev) => [newPost, ...prev]);
 	};
 
 	return (
