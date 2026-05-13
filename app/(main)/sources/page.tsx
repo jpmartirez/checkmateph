@@ -17,22 +17,22 @@ const SourcesPage = () => {
 	return (
 		<section className="px-4 pb-10 pt-8 sm:px-6">
 			<div className="mx-auto max-w-3xl text-center">
-				<h1 className="text-2xl font-semibold text-(--text-primary) sm:text-3xl">
+				<h1 className="text-2xl font-semibold text-[var(--text-primary)] sm:text-3xl">
 					Verified Sources
 				</h1>
-				<p className="mt-2 text-sm text-(--text-muted) sm:text-base">
+				<p className="mt-2 text-sm text-[var(--text-muted)] sm:text-base">
 					Official primary sources and authenticated news organizations for
 					citation and fact-verification.
 				</p>
 			</div>
 
-			<div className="mx-auto mt-6 flex w-full max-w-2xl items-center gap-2 rounded-full border border-(--border-subtle) bg-(--bg-tertiary) px-4 py-2 text-(--text-secondary)">
+			<div className="mx-auto mt-6 flex w-full max-w-2xl items-center gap-2 rounded-full border border-[var(--border-subtle)] bg-[var(--bg-tertiary)] px-4 py-2 text-[var(--text-secondary)]">
 				<Search className="h-4 w-4" />
 				<Input
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
 					placeholder="Search verified domains and institutions..."
-					className="h-7 border-none bg-transparent px-0 text-sm text-(--text-primary) placeholder:text-(--text-muted) focus-visible:ring-0"
+					className="h-7 border-none bg-transparent px-0 text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus-visible:ring-0"
 				/>
 			</div>
 
@@ -49,7 +49,7 @@ const SourcesPage = () => {
 						<TabsTrigger
 							key={tab.id}
 							value={tab.id}
-							className="rounded-full border border-transparent px-4 py-2 text-xs font-semibold uppercase tracking-wide text-(--text-muted)data-active:bg-(--color-brand) data-active:text-white sm:text-sm"
+							className="rounded-full border border-transparent px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)] data-active:bg-[var(--color-brand)] data-active:text-white sm:text-sm"
 						>
 							{tab.label}
 						</TabsTrigger>
