@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Label } from "../ui/label";
-import { Eye, EyeOff, Globe, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
 import { Input } from "../ui/input";
 import Link from "next/link";
 import { Button } from "../ui/button";
@@ -21,7 +21,7 @@ const LoginForm = () => {
 	};
 
 	return (
-		<form onSubmit={handleSubmit} className="flex flex-col gap-5">
+		<form onSubmit={handleSubmit} className="flex flex-col gap-3">
 			{/* Email */}
 			<div className="flex flex-col gap-1.5">
 				<Label htmlFor="email" className="text-[#c0c0d8] text-sm font-medium">
@@ -124,27 +124,38 @@ const LoginForm = () => {
 				<Separator className="flex-1 bg-[#2a2540]" />
 			</div>
 
-			{/* OAuth buttons */}
-			<Button
-				type="button"
-				variant="outline"
-				className="h-11 rounded-lg bg-[#1a1830] border-[#2d2a4a] text-[#c0c0d8] hover:bg-[#231f3d] hover:text-white hover:border-[#6c4eff]/50 transition-all duration-200 gap-2"
+			{/* Create Account Button */}
+			<Link
+				href={"/register"}
+				className="h-9 flex items-center px-2 rounded-lg bg-primary text-white font-semibold text-sm shadow-lg shadow-[#6c4eff]/30 transition-all duration-200 active:scale-[0.98] disabled:opacity-70 w-auto self-start mx-auto"
 			>
-				<Globe className="w-4 h-4" />
-				Continue with Google
-			</Button>
-
-			<Button
-				type="button"
-				variant="outline"
-				className="h-11 rounded-lg bg-[#1a1830] border-[#2d2a4a] text-[#c0c0d8] hover:bg-[#231f3d] hover:text-white hover:border-[#6c4eff]/50 transition-all duration-200 gap-2"
-			>
-				{/* Facebook icon */}
-				<svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073c0 6.027 4.388 11.025 10.125 11.927v-8.437H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.668 4.533-4.668 1.313 0 2.686.235 2.686.235v2.953h-1.514c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.49h-2.796v8.437C19.612 23.098 24 18.1 24 12.073z" />
-				</svg>
-				Continue with Facebook
-			</Button>
+				{isLoading ? (
+					<span className="flex items-center gap-2">
+						<svg
+							className="animate-spin w-4 h-4"
+							fill="none"
+							viewBox="0 0 24 24"
+						>
+							<circle
+								className="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								strokeWidth="4"
+							/>
+							<path
+								className="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8v4l3-3-3-3v4a8 8 0 00-8 8h4z"
+							/>
+						</svg>
+						Signing in…
+					</span>
+				) : (
+					"Create Account"
+				)}
+			</Link>
 		</form>
 	);
 };
