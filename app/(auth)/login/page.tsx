@@ -1,7 +1,67 @@
-import React from "react";
+"use client";
 
-const page = () => {
-	return <div>page</div>;
-};
+import Link from "next/link";
+import Image from "next/image";
+import Footer from "@/components/login/Footer";
+import LoginForm from "@/components/login/LoginForm";
+import LeftSide from "@/components/login/LeftSide";
 
-export default page;
+export default function LoginPage() {
+	return (
+		<div className="relative min-h-screen w-full overflow-hidden bg-background flex flex-col">
+			{/* Background image */}
+			<div className="absolute inset-0">
+				<Image
+					src="/login-bg.png"
+					alt="Background"
+					fill
+					className="object-cover opacity-20"
+					priority
+				/>
+				{/* Gradient overlay */}
+				<div className="absolute inset-0 bg-linear-to-br from-[#0d0d14]/90 via-[#0d0d14]/70 to-[#1a1030]/80" />
+			</div>
+
+			{/* Main content */}
+			<main className="relative z-10 flex flex-1 flex-col lg:flex-row items-center justify-center px-4 py-12 gap-12 lg:gap-20 max-w-6xl mx-auto w-full">
+				{/* Left: Branding & features */}
+				<LeftSide />
+
+				{/* Right: Login card */}
+				<div className="w-full max-w-md lg:w-1/2">
+					<div className="rounded-2xl bg-card border border-(--border-subtle)  backdrop-blur-xl shadow-soft-lg p-8">
+						<div className="text-center mb-8">
+							<h2 className="text-2xl font-bold text-foreground mb-1">
+								Welcome Back
+							</h2>
+							<p className="text-sm text-(--text-muted)">
+								Sign in to continue to the Verification Desk
+							</p>
+						</div>
+
+						{/* Login form */}
+						<LoginForm />
+
+						{/* Sign up link */}
+						<p className="text-center text-sm text-(--text-muted) mt-6">
+							Dont have an account?{" "}
+							<Link
+								href="/register"
+								className="text-foreground font-medium underline underline-offset-2 hover:text-brand transition-colors"
+							>
+								Create an account
+							</Link>
+						</p>
+					</div>
+
+					<p className="text-center text-[10px] tracking-widest text-[#4a4868] mt-4 font-medium">
+						SECURE CONNECTION ESTABLISHED • 256-BIT ENCRYPTION
+					</p>
+				</div>
+			</main>
+
+			{/* Footer */}
+			<Footer />
+		</div>
+	);
+}
