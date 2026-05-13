@@ -1,1 +1,8 @@
-// CRUD with rate limiting check
+import { NextResponse } from "next/server";
+
+export async function GET() {
+	return NextResponse.json(
+		{ error: "Posts route not implemented." },
+		{ status: 501 },
+	);
+}
