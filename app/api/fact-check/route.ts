@@ -1,42 +1,50 @@
-import { NextResponse } from 'next/server'
-import { saveAICheck, parseAICheckResponse } from '@/lib/ai-source-checks'
+import { NextResponse } from "next/server";
+import { saveAICheck, parseAICheckResponse } from "@/lib/ai-source-checks";
 
-import { GoogleGenAI } from "@google/genai"
+import { GoogleGenAI } from "@google/genai";
 
 export async function POST(request: Request) {
-  try {
-    const { post_id, claim, source_urls } = await request.json()
+	try {
+		const { post_id, claim, source_urls } = await request.json();
 
-    if (!post_id || !claim || !source_urls?.length) {
-        return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
+		if (!post_id || !claim || !source_urls?.length) {
+			return NextResponse.json(
+				{ error: "Missing required fields" },
+				{ status: 400 },
+			);
+		}
 
-    // Fetch content from each source URL
-    const sourceFetches = await Promise.allSettled(
-        source_urls.map((url: string) =>
-        fetch(url)
-            .then(r => r.text())
-            .then(text => ({ url, content: text.slice(0, 2000) })) // cap per source
-            .catch(() => ({ url, content: '[Could not fetch]' }))
-        )
-    )
+		// Fetch content from each source URL
+		const sourceFetches = await Promise.allSettled(
+			source_urls.map((url: string) =>
+				fetch(url)
+					.then((r) => r.text())
+					.then((text) => ({ url, content: text.slice(0, 2000) })) // cap per source
+					.catch(() => ({ url, content: "[Could not fetch]" })),
+			),
+		);
 
-    const sources = sourceFetches
-        .filter(r => r.status === 'fulfilled')
-        .map(r => (r as PromiseFulfilledResult<{ url: string; content: string }>).value)
+		const sources = sourceFetches
+			.filter((r) => r.status === "fulfilled")
+			.map(
+				(r) =>
+					(r as PromiseFulfilledResult<{ url: string; content: string }>).value,
+			);
 
-    const sourcesText = sources
-        .map((s, i) => `Source ${i + 1} (${s.url}):\n${s.content}`)
-        .join('\n\n---\n\n')
+		const sourcesText = sources
+			.map((s, i) => `Source ${i + 1} (${s.url}):\n${s.content}`)
+			.join("\n\n---\n\n");
 
-        const ai = new GoogleGenAI({});
+		const ai = new GoogleGenAI({});
 
-        const aiResponse = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: [
-                {
-                    role: "user",
-                    parts: [{ text: `You are a fact-checking assistant. Evaluate whether the following claim is coherent with and supported by the provided sources.
+		const aiResponse = await ai.models.generateContent({
+			model: "gemini-3-flash-preview",
+			contents: [
+				{
+					role: "user",
+					parts: [
+						{
+							text: `You are a fact-checking assistant. Evaluate whether the following claim is coherent with and supported by the provided sources.
                                     CLAIM:
                                     ${claim}
 
@@ -55,30 +63,37 @@ export async function POST(request: Request) {
                                     - AGREE: sources generally support the claim
                                     - NEUTRAL: sources are inconclusive or unrelated
                                     - DISAGREE: sources contradict the claim
-                                    - STRONGLY_DISAGREE: sources directly refute the claim`
-                            }]
-                }
-            ],
-        });
+                                    - STRONGLY_DISAGREE: sources directly refute the claim`,
+						},
+					],
+				},
+			],
+		});
 
-        const rawText = aiResponse.text
+		const rawText = aiResponse.text;
 
-        if (!rawText) {
-            return NextResponse.json({ error: 'AI failed to generate a response' }, { status: 502 })
-        }
+		if (!rawText) {
+			return NextResponse.json(
+				{ error: "AI failed to generate a response" },
+				{ status: 502 },
+			);
+		}
 
-    const parsed = parseAICheckResponse(rawText)
+		const parsed = parseAICheckResponse(rawText);
 
-    const saved = await saveAICheck({
-        post_id,
-        verdict: parsed.verdict,
-        confidence: parsed.confidence,
-        rationale: parsed.rationale,
-    })
+		const saved = await saveAICheck({
+			post_id,
+			verdict: parsed.verdict,
+			confidence: parsed.confidence,
+			rationale: parsed.rationale,
+		});
 
-    return NextResponse.json(saved, { status: 201 })
-  } catch (error) {
-    console.error("Route Error:", error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
-  }
+		return NextResponse.json(saved, { status: 201 });
+	} catch (error) {
+		console.error("Route Error:", error);
+		return NextResponse.json(
+			{ error: "Internal Server Error" },
+			{ status: 500 },
+		);
+	}
 }
