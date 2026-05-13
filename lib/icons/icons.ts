@@ -31,6 +31,7 @@ export {
 	Eye,
 	ExternalLink,
 	Link2,
+	BookOpen,
 
 	// Fact-check verdicts
 	CheckCircle2,
@@ -61,4 +62,5 @@ export {
 	Globe,
 	ArrowLeft,
 	Loader2,
+	X,
 } from "lucide-react";
