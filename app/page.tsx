@@ -1,5 +1,7 @@
-const page = () => {
-	return <div>page</div>;
+import { redirect } from "next/navigation";
+
+const Page = () => {
+	redirect("/feed");
 };
 
-export default page;
+export default Page;
