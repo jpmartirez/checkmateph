@@ -3,7 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Bell, Menu, Search, ShieldCheck } from "@/lib/icons/icons";
+import { Menu, Search, ShieldCheck } from "@/lib/icons/icons";
+import { X } from "lucide-react";
+import { NotificationsPopover } from "@/components/main/NotificationsPopover";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -35,6 +37,7 @@ const TopNav = ({ onMenuClick }: TopNavProps) => {
 	const [userId, setUserId] = useState<string | null>(null);
 	const [displayName, setDisplayName] = useState<string>("DC");
 	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+	const [searchValue, setSearchValue] = useState("");
 	const router = useRouter();
 
 	useEffect(() => {
@@ -138,11 +141,36 @@ const TopNav = ({ onMenuClick }: TopNavProps) => {
 
 					<div className="flex flex-1 items-center justify-center">
 						<div className="flex h-9 w-full max-w-md items-center gap-2 rounded-full border border-(--border-subtle) bg-(--bg-tertiary) px-3 text-(--text-secondary)">
-							<Search className="h-4 w-10 shrink-0" />
+							<Search className="h-4 w-4 shrink-0" />
 							<Input
-								placeholder="Search CheckMatePh"
+								value={searchValue}
+								onChange={(e) => setSearchValue(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === "Enter") {
+										const q = searchValue.trim();
+										router.push(q ? `/feed?q=${encodeURIComponent(q)}` : "/feed");
+									}
+									if (e.key === "Escape") {
+										setSearchValue("");
+										router.push("/feed");
+									}
+								}}
+								placeholder="Search posts…"
 								className="h-7 w-full border-none bg-transparent px-0 text-sm text-(--text-primary) placeholder:text-(--text-muted) focus-visible:ring-0"
 							/>
+							{searchValue && (
+								<button
+									type="button"
+									aria-label="Clear search"
+									onClick={() => {
+										setSearchValue("");
+										router.push("/feed");
+									}}
+									className="shrink-0 text-(--text-muted) hover:text-(--text-primary)"
+								>
+									<X className="h-3.5 w-3.5" />
+								</button>
+							)}
 						</div>
 					</div>
 				</div>
@@ -153,10 +181,7 @@ const TopNav = ({ onMenuClick }: TopNavProps) => {
 						<ShieldCheck className="h-4 w-4" />
 					</Button>
 
-					<Button variant="ghost" size="icon" className="relative">
-						<Bell className="h-4 w-4" />
-						<span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-brand" />
-					</Button>
+					<NotificationsPopover />
 
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>

@@ -22,4 +22,7 @@ export type Politician = {
 	location: PoliticianLocation;
 	imageUrl: string;
 	verified: boolean;
+	background?: string;
+	education?: string;
+	knownFor?: string;
 };

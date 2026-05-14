@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Dialog,
 	DialogContent,
@@ -21,6 +21,7 @@ import {
 	X,
 	Globe,
 	BadgeCheck,
+	Loader2,
 } from "lucide-react";
 import { Post, PostCategory } from "./feed-types";
 import { createClient } from "@/lib/supabase/client";
@@ -52,6 +53,10 @@ export function CreatePostModal({
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [displayName, setDisplayName] = useState<string>("User");
 	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+	const [imagePreview, setImagePreview] = useState<string | null>(null);
+	const [imageUrl, setImageUrl] = useState<string | null>(null);
+	const [uploading, setUploading] = useState(false);
+	const fileInputRef = useRef<HTMLInputElement>(null);
 	const initials = useMemo(() => {
 		const parts = displayName.trim().split(/\s+/).filter(Boolean);
 		if (parts.length === 0) return "U";
@@ -108,8 +113,66 @@ export function CreatePostModal({
 			setCertified(false);
 			setSources([]);
 			setErrorMessage(null);
+			setImagePreview(null);
+			setImageUrl(null);
 		}
 		onOpenChange(newOpen);
+	};
+
+	const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!e.target.files) e.target.value = "";
+		if (!file) return;
+
+		const MAX_MB = 5;
+		if (file.size > MAX_MB * 1024 * 1024) {
+			setErrorMessage(`Image must be under ${MAX_MB} MB.`);
+			return;
+		}
+		if (!file.type.startsWith("image/")) {
+			setErrorMessage("Only image files are allowed.");
+			return;
+		}
+
+		setErrorMessage(null);
+		setImagePreview(URL.createObjectURL(file));
+		setUploading(true);
+
+		try {
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) throw new Error("Not authenticated");
+
+			const ext = file.name.split(".").pop() ?? "jpg";
+			const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+
+			const { error: uploadError } = await supabase.storage
+				.from("post-images")
+				.upload(path, file, { contentType: file.type, upsert: false });
+
+			if (uploadError) throw uploadError;
+
+			const { data: { publicUrl } } = supabase.storage
+				.from("post-images")
+				.getPublicUrl(path);
+
+			setImageUrl(publicUrl);
+		} catch (err) {
+			setErrorMessage(
+				err instanceof Error ? err.message : "Image upload failed.",
+			);
+			setImagePreview(null);
+			setImageUrl(null);
+		} finally {
+			setUploading(false);
+			if (fileInputRef.current) fileInputRef.current.value = "";
+		}
+	};
+
+	const removeImage = () => {
+		setImagePreview(null);
+		setImageUrl(null);
+		if (fileInputRef.current) fileInputRef.current.value = "";
 	};
 
 	const handleAddSource = () => {
@@ -140,6 +203,7 @@ export function CreatePostModal({
 				body: JSON.stringify({
 					category: intent as PostCategory,
 					contentText: content,
+					imageUrl: imageUrl ?? undefined,
 					sources: sources.map((s) => ({ title: s.title, url: s.url })),
 				}),
 			});
@@ -182,7 +246,7 @@ export function CreatePostModal({
 
 	return (
 		<Dialog open={open} onOpenChange={handleOpenChange}>
-			<DialogContent className="w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-800 text-zinc-100 p-0 sm:rounded-2xl my-4 sm:my-8">
+			<DialogContent aria-describedby={undefined} className="w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-800 text-zinc-100 p-0 sm:rounded-2xl my-4 sm:my-8">
 				<div className="p-4 sm:p-6 md:p-8">
 					<DialogHeader className="mb-6 flex flex-row items-center justify-between">
 						<DialogTitle className="text-xl font-bold">Create Post</DialogTitle>
@@ -234,8 +298,17 @@ export function CreatePostModal({
 						</button>
 					</div>
 
+					{/* Hidden file input */}
+					<input
+						ref={fileInputRef}
+						type="file"
+						accept="image/*"
+						className="hidden"
+						onChange={handleImageSelect}
+					/>
+
 					{/* Text Area */}
-					<div className="relative mb-6">
+					<div className="relative mb-4">
 						<Textarea
 							value={content}
 							onChange={(e) => setContent(e.target.value)}
@@ -246,10 +319,49 @@ export function CreatePostModal({
 							}
 							className="min-h-25 border-none text-xl resize-none placeholder:text-[#B484FF]/70 text-[#D0B2FF] focus-visible:ring-0 p-4 pr-12 rounded-xl bg-zinc-800/30"
 						/>
-						<div className="absolute right-4 top-4 text-emerald-500 hover:text-emerald-400 cursor-pointer">
-							<ImageIcon className="w-6 h-6" />
-						</div>
+						<button
+							type="button"
+							onClick={() => fileInputRef.current?.click()}
+							disabled={uploading}
+							className="absolute right-4 top-4 text-emerald-500 hover:text-emerald-400 disabled:opacity-50"
+						>
+							{uploading ? (
+								<Loader2 className="w-6 h-6 animate-spin" />
+							) : (
+								<ImageIcon className="w-6 h-6" />
+							)}
+						</button>
 					</div>
+
+					{/* Image preview */}
+					{imagePreview && (
+						<div className="relative mb-4 rounded-xl overflow-hidden border border-zinc-700">
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img
+								src={imagePreview}
+								alt="Post image preview"
+								className="w-full max-h-64 object-cover"
+							/>
+							<button
+								type="button"
+								onClick={removeImage}
+								className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1"
+							>
+								<X className="w-4 h-4" />
+							</button>
+							{uploading && (
+								<div className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2 text-white text-sm">
+									<Loader2 className="w-5 h-5 animate-spin" />
+									Uploading…
+								</div>
+							)}
+							{imageUrl && !uploading && (
+								<div className="absolute bottom-2 right-2 bg-emerald-500/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+									Uploaded
+								</div>
+							)}
+						</div>
+					)}
 
 					{/* Verified Source Badge */}
 					{intent === "CLAIM" && (
@@ -357,7 +469,7 @@ export function CreatePostModal({
 					<div className="flex flex-col gap-3">
 						<Button
 							className="w-full bg-[#B484FF] hover:bg-[#A36DFF] text-white py-6 rounded-xl font-semibold text-lg"
-							disabled={!content.trim() || !certified}
+							disabled={!content.trim() || !certified || uploading}
 							onClick={handleSubmit}
 						>
 							Submit {intent === "CLAIM" ? "Claim" : "Opinion"}

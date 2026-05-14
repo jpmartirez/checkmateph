@@ -1,19 +1,21 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { UserProfile } from "@/components/profile/profile-types";
 import { Button } from "@/components/ui/button";
-import { BadgeCheck, MoreHorizontal, UserPlus, ArrowLeft } from "lucide-react";
+import { BadgeCheck, MoreHorizontal, UserPlus, ArrowLeft, Pencil } from "lucide-react";
+import { EditProfileModal } from "@/components/profile/EditProfileModal";
 
 interface ProfileHeaderProps {
 	profile: UserProfile;
+	isOwnProfile?: boolean;
 }
 
-export const ProfileHeader = ({ profile }: ProfileHeaderProps) => {
+export const ProfileHeader = ({ profile, isOwnProfile = false }: ProfileHeaderProps) => {
 	const router = useRouter();
-	const isCandidate = profile.role === "CANDIDATE";
+	const [editOpen, setEditOpen] = useState(false);
 
 	return (
 		<div className="w-full">
@@ -51,9 +53,7 @@ export const ProfileHeader = ({ profile }: ProfileHeaderProps) => {
 
 						<div className="flex-1 text-center sm:text-left mt-2 sm:mt-0 pb-1 w-full flex flex-col items-center sm:items-start">
 							<div className="flex items-center gap-2">
-								<h1 className="text-2xl md:text-3xl font-bold">
-									{profile.name}
-								</h1>
+								<h1 className="text-2xl md:text-3xl font-bold">{profile.name}</h1>
 								{profile.isVerified && (
 									<BadgeCheck className="w-6 h-6 text-purple-600 shrink-0" />
 								)}
@@ -66,9 +66,27 @@ export const ProfileHeader = ({ profile }: ProfileHeaderProps) => {
 					</div>
 
 					<div className="flex gap-2 mt-4 sm:mt-0 w-full sm:w-auto shrink-0 justify-center sm:justify-end pb-1">
-						{isCandidate ? (
+						{isOwnProfile ? (
 							<>
-								<Button className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto rounded-md px-6">
+								<Button
+									variant="secondary"
+									className="w-full sm:w-auto rounded-md border border-border/50 bg-secondary/20"
+									onClick={() => setEditOpen(true)}
+								>
+									<Pencil className="w-4 h-4 mr-2" />
+									Edit Profile
+								</Button>
+								<Button
+									variant="secondary"
+									size="icon"
+									className="shrink-0 rounded-md bg-secondary/20"
+								>
+									<MoreHorizontal className="w-4 h-4" />
+								</Button>
+							</>
+						) : (
+							<>
+								<Button className="bg-purple-600 hover:bg-purple-700 w-full sm:w-auto rounded-md px-6 text-white">
 									<UserPlus className="w-4 h-4 mr-2" />
 									Follow
 								</Button>
@@ -80,26 +98,21 @@ export const ProfileHeader = ({ profile }: ProfileHeaderProps) => {
 									<MoreHorizontal className="w-4 h-4" />
 								</Button>
 							</>
-						) : (
-							<>
-								<Button
-									variant="secondary"
-									className="w-full sm:w-auto rounded-md border border-border/50 bg-secondary/20"
-								>
-									Edit Profile
-								</Button>
-								<Button
-									variant="secondary"
-									size="icon"
-									className="shrink-0 rounded-md bg-secondary/20"
-								>
-									<MoreHorizontal className="w-4 h-4" />
-								</Button>
-							</>
 						)}
 					</div>
 				</div>
 			</div>
+
+			{isOwnProfile && (
+				<EditProfileModal
+					open={editOpen}
+					onOpenChange={setEditOpen}
+					userId={profile.id}
+					displayName={profile.name}
+					currentAvatarUrl={profile.avatarUrl}
+					currentCoverUrl={profile.coverUrl}
+				/>
+			)}
 		</div>
 	);
 };

@@ -5,9 +5,12 @@ import type {
 	PostCategory,
 	PostComment,
 	CommentSource,
+	CommentType,
 	PostSource,
 	PostStatus,
 } from "@/components/main/feed/feed-types";
+
+
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -18,15 +21,10 @@ function getString(value: unknown): string | undefined {
 }
 
 function formatTimeAgo(iso: string): string {
-	const date = new Date(iso);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
-
+	const diffSeconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
 	const minutes = Math.floor(diffSeconds / 60);
 	const hours = Math.floor(minutes / 60);
 	const days = Math.floor(hours / 24);
-
 	if (minutes < 1) return "Just now";
 	if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
 	if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
@@ -34,147 +32,129 @@ function formatTimeAgo(iso: string): string {
 	return `${days} days ago`;
 }
 
-function mapDbPostToUi(row: unknown): Post | null {
+const POST_SELECT =
+	"id, created_at, category, content, image_url, status, reactions_count, comments_count, shares_count, " +
+	"author:profiles!posts_author_id_fkey(id, display_name, avatar_url, role), " +
+	"sources:post_sources(id, title, url, is_verified)";
+
+function mapRowToPost(row: unknown): Post | null {
 	if (!isRecord(row)) return null;
 
 	const id = getString(row.id);
 	const createdAt = getString(row.created_at);
 	const category = getString(row.category) as PostCategory | undefined;
 	const content = getString(row.content);
-	const imageUrl = getString(row.image_url);
 
 	if (!id || !createdAt || !content) return null;
 	if (category !== "CLAIM" && category !== "OPINION") return null;
 
-	const statusRaw = row.status;
-	const status = Array.isArray(statusRaw)
-		? (statusRaw.filter((s) => typeof s === "string") as PostStatus[])
+	const status = Array.isArray(row.status)
+		? (row.status.filter((s) => typeof s === "string") as PostStatus[])
 		: [];
 
 	const authorRaw = row.author;
-	const author = isRecord(authorRaw)
+	const authorObj = isRecord(authorRaw)
 		? authorRaw
-		: Array.isArray(authorRaw) && authorRaw.length > 0 && isRecord(authorRaw[0])
+		: Array.isArray(authorRaw) && isRecord(authorRaw[0])
 			? authorRaw[0]
 			: null;
 
-	const authorId = getString(author?.id) ?? "unknown";
-	const authorName = getString(author?.display_name) ?? "Unknown";
-	const authorAvatar =
-		getString(author?.avatar_url) ?? `https://i.pravatar.cc/150?u=${authorId}`;
-	const authorRole = getString(author?.role) ?? undefined;
+	const authorId = getString(authorObj?.id) ?? "unknown";
+	const authorName = getString(authorObj?.display_name) ?? "Unknown";
+	const authorAvatar = getString(authorObj?.avatar_url) ?? `https://i.pravatar.cc/150?u=${authorId}`;
+	const authorRole = getString(authorObj?.role);
 
-	const reactionsCount =
-		typeof row.reactions_count === "number" ? row.reactions_count : 0;
-	const commentsCount =
-		typeof row.comments_count === "number" ? row.comments_count : 0;
-	const sharesCount = typeof row.shares_count === "number" ? row.shares_count : 0;
-
-	const sourcesRaw = row.sources;
-	const sources = Array.isArray(sourcesRaw) ? sourcesRaw : [];
-	const referencesCount = sources.length;
-	const mappedSources = sources
-		.map((source): PostSource | null => {
-			if (!isRecord(source)) return null;
-			const sourceId = getString(source.id);
-			const title = getString(source.title);
-			const url = getString(source.url);
-			if (!sourceId || !title || !url) return null;
-			const isVerified =
-				typeof source.is_verified === "boolean" ? source.is_verified : undefined;
+	const sourcesRaw = Array.isArray(row.sources) ? row.sources : [];
+	const sources = sourcesRaw
+		.map((s): PostSource | null => {
+			if (!isRecord(s)) return null;
+			const sid = getString(s.id);
+			const title = getString(s.title);
+			const url = getString(s.url);
+			if (!sid || !title || !url) return null;
 			return {
-				id: sourceId,
+				id: sid,
 				title,
 				url,
-				...(typeof isVerified === "boolean" ? { isVerified } : {}),
+				...(typeof s.is_verified === "boolean" ? { isVerified: s.is_verified } : {}),
 			};
 		})
-		.filter((source): source is PostSource => source !== null);
+		.filter((s): s is PostSource => s !== null);
 
 	return {
 		id,
-		author: {
-			id: authorId,
-			name: authorName,
-			avatarUrl: authorAvatar,
-			role: authorRole,
-		},
+		author: { id: authorId, name: authorName, avatarUrl: authorAvatar, role: authorRole },
 		timeAgo: formatTimeAgo(createdAt),
 		contentText: content,
-		image: imageUrl ?? undefined,
+		image: getString(row.image_url),
 		status: status.length ? status : undefined,
 		category,
-		sources: mappedSources.length ? mappedSources : undefined,
+		sources: sources.length ? sources : undefined,
 		stats: {
-			reactions: reactionsCount,
-			comments: commentsCount,
-			shares: sharesCount,
-			references: referencesCount,
+			reactions: typeof row.reactions_count === "number" ? row.reactions_count : 0,
+			comments: typeof row.comments_count === "number" ? row.comments_count : 0,
+			shares: typeof row.shares_count === "number" ? row.shares_count : 0,
+			references: sources.length,
 		},
 	};
 }
 
-function mapDbCommentToUi(row: unknown): PostComment | null {
-	if (!isRecord(row)) return null;
-
+function mapRowToComment(
+	row: Record<string, unknown>,
+	commentSources: Record<string, unknown>[],
+): PostComment | null {
 	const id = getString(row.id);
 	const postId = getString(row.post_id);
 	const content = getString(row.content);
-	const type = getString(row.type) as PostComment["type"] | undefined;
+	const type = getString(row.type) as CommentType | undefined;
 	const createdAt = getString(row.created_at);
-	if (!id || !postId || !content || !type || !createdAt) return null;
+
+	if (!id || !postId || !content || !createdAt) return null;
+	if (type !== "OPINION" && type !== "CLAIM" && type !== "COUNTER_CLAIM") return null;
 
 	const authorRaw = row.author;
-	const author = isRecord(authorRaw)
+	const authorObj = isRecord(authorRaw)
 		? authorRaw
-		: Array.isArray(authorRaw) && authorRaw.length > 0 && isRecord(authorRaw[0])
+		: Array.isArray(authorRaw) && isRecord(authorRaw[0])
 			? authorRaw[0]
 			: null;
 
-	const authorId = getString(author?.id) ?? "unknown";
-	const authorName = getString(author?.display_name) ?? "Unknown";
-	const authorAvatar =
-		getString(author?.avatar_url) ?? `https://i.pravatar.cc/150?u=${authorId}`;
-	const authorRole = getString(author?.role) ?? undefined;
+	const authorId = getString(authorObj?.id) ?? "unknown";
+	const authorName = getString(authorObj?.display_name) ?? "Unknown";
+	const authorAvatar = getString(authorObj?.avatar_url) ?? `https://i.pravatar.cc/150?u=${authorId}`;
+	const authorRole = getString(authorObj?.role);
 
-	const sourcesRaw = row.sources;
-	const sources = Array.isArray(sourcesRaw) ? sourcesRaw : [];
-	const mappedSources = sources
-		.map((source): CommentSource | null => {
-			if (!isRecord(source)) return null;
-			const sourceId = getString(source.id);
-			const title = getString(source.title);
-			const url = getString(source.url);
-			if (!sourceId || !title || !url) return null;
-			const isVerified =
-				typeof source.is_verified === "boolean" ? source.is_verified : undefined;
+	const commentStatus = Array.isArray(row.status)
+		? (row.status.filter((s) => typeof s === "string") as PostStatus[])
+		: [];
+
+	const sources = commentSources
+		.map((s): CommentSource | null => {
+			const sid = getString(s.id);
+			const title = getString(s.title);
+			const url = getString(s.url);
+			if (!sid || !title || !url) return null;
 			return {
-				id: sourceId,
+				id: sid,
 				title,
 				url,
-				...(typeof isVerified === "boolean" ? { isVerified } : {}),
+				...(typeof s.is_verified === "boolean" ? { isVerified: s.is_verified } : {}),
 			};
 		})
-		.filter((source): source is CommentSource => source !== null);
+		.filter((s): s is CommentSource => s !== null);
 
 	return {
 		id,
 		postId,
-		author: {
-			id: authorId,
-			name: authorName,
-			avatarUrl: authorAvatar,
-			role: authorRole,
-		},
+		author: { id: authorId, name: authorName, avatarUrl: authorAvatar, role: authorRole },
 		content,
 		type,
+		status: commentStatus.length ? commentStatus : undefined,
 		createdAt,
-		sources: mappedSources.length ? mappedSources : undefined,
+		sources: sources.length ? sources : undefined,
 	};
 }
 
-const postSelect =
-	"id, created_at, category, content, image_url, status, reactions_count, comments_count, shares_count, author:profiles!posts_author_id_fkey(id, display_name, avatar_url, role), sources:post_sources(id, title, url, is_verified)";
 
 export async function GET(
 	_request: Request,
@@ -188,102 +168,84 @@ export async function GET(
 
 	const { postId } = await params;
 	if (!postId) {
-		return NextResponse.json({ error: "Missing post id" }, { status: 400 });
+		return NextResponse.json({ error: "Missing postId" }, { status: 400 });
 	}
 
+	// --- Fetch post ---
 	const { data: postRow, error: postError } = await supabase
 		.from("posts")
-		.select(postSelect)
+		.select(POST_SELECT)
 		.eq("id", postId)
 		.single();
 
 	if (postError || !postRow) {
-		return NextResponse.json({ error: "Not found" }, { status: 404 });
+		return NextResponse.json({ error: "Post not found" }, { status: 404 });
 	}
 
-	const post = mapDbPostToUi(postRow);
+	const post = mapRowToPost(postRow);
 	if (!post) {
-		console.error("Failed to map post. Row data:", JSON.stringify(postRow, null, 2));
 		return NextResponse.json({ error: "Failed to map post" }, { status: 500 });
 	}
 
-	const { count: reactionsCount, error: reactionsError } = await supabase
+	// --- Fetch live reactions count ---
+	const { count: reactionsCount } = await supabase
 		.from("post_reactions")
 		.select("id", { count: "exact", head: true })
 		.eq("post_id", postId);
 
-	const resolvedReactionsCount =
-		reactionsError || typeof reactionsCount !== "number"
-			? post.stats.reactions
-			: reactionsCount;
-
+	// --- Fetch comments ---
 	const { data: commentRows, error: commentError } = await supabase
 		.from("post_comments")
-		.select(
-			"id, post_id, type, content, created_at, author:profiles!post_comments_author_id_fkey(id, display_name, avatar_url, role)",
-		)
+		.select("id, post_id, type, content, status, created_at, author:profiles!author_id(id, display_name, avatar_url, role)")
 		.eq("post_id", postId)
 		.order("created_at", { ascending: true });
 
 	if (commentError) {
-		console.error("commentError:", commentError);
-		return NextResponse.json({ error: "commentError: " + commentError.message }, { status: 500 });
+		return NextResponse.json({ error: commentError.message }, { status: 500 });
 	}
 
-	const commentIds = (commentRows ?? []).map((row) => row.id);
-	let allCommentSources: any[] = [];
+	// --- Fetch comment sources in one query ---
+	const commentIds = (commentRows ?? []).map((r) => r.id as string);
+	const sourcesMap: Record<string, Record<string, unknown>[]> = {};
 	if (commentIds.length > 0) {
-		const { data: sourcesData } = await supabase
+		const { data: sourcesRows } = await supabase
 			.from("comment_sources")
 			.select("id, comment_id, title, url, is_verified")
 			.in("comment_id", commentIds);
-		allCommentSources = sourcesData ?? [];
+		for (const s of (sourcesRows ?? []) as Record<string, unknown>[]) {
+			const cid = getString(s.comment_id);
+			if (cid) (sourcesMap[cid] ??= []).push(s);
+		}
 	}
 
 	const comments = (commentRows ?? [])
-		.map((row) => {
-			const rowSources = allCommentSources.filter(s => s.comment_id === row.id);
-			return mapDbCommentToUi({ ...row, sources: rowSources });
-		})
-		.filter((item): item is PostComment => item !== null);
+		.map((row) => mapRowToComment(row as Record<string, unknown>, sourcesMap[row.id as string] ?? []))
+		.filter((c): c is PostComment => c !== null);
 
-	const { data: reviewRows, error: reviewError } = await supabase
+	// --- Expert review consensus (claim posts only) ---
+	const { data: reviewRows } = await supabase
 		.from("expert_reviews")
 		.select("average_score")
 		.eq("post_id", postId);
 
-	if (reviewError) {
-		console.error("reviewError:", reviewError);
-		return NextResponse.json({ error: "reviewError: " + reviewError.message }, { status: 500 });
-	}
-
 	const scores = (reviewRows ?? [])
-		.map((row) => (isRecord(row) ? row.average_score : null))
-		.filter((score): score is number => typeof score === "number");
+		.map((r) => (isRecord(r) ? r.average_score : null))
+		.filter((s): s is number => typeof s === "number");
 
-	const supported = scores.filter((score) => score >= 3).length;
-	const disputed = scores.filter((score) => score < 3).length;
+	const supported = scores.filter((s) => s >= 3).length;
+	const disputed = scores.filter((s) => s < 3).length;
 	const total = supported + disputed;
 	const leaning =
-		total === 0 || supported === disputed
-			? "NEUTRAL"
-			: supported > disputed
-				? "SUPPORTED"
-				: "DISPUTED";
+		total === 0 || supported === disputed ? "NEUTRAL" : supported > disputed ? "SUPPORTED" : "DISPUTED";
 
 	return NextResponse.json({
 		post: {
 			...post,
 			stats: {
 				...post.stats,
-				reactions: resolvedReactionsCount,
+				reactions: typeof reactionsCount === "number" ? reactionsCount : post.stats.reactions,
 			},
-			consensus: {
-				supported,
-				disputed,
-				total,
-				leaning,
-			},
+			consensus: { supported, disputed, total, leaning },
 		},
 		comments,
 	});

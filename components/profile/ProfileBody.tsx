@@ -271,7 +271,7 @@ export const ProfileBody = ({ profile, activeTab }: ProfileBodyProps) => {
 	);
 };
 
-// Helper inside the file, you can move CheckBadge to icons.ts if not there
+
 const CheckBadge = ({ className }: { className?: string }) => (
 	<svg
 		className={className}

@@ -18,7 +18,7 @@ export default async function ProfileMePage() {
 
 	if (!user) redirect("/login");
 
-	// Ensure profile exists for this user (works even if some columns are missing).
+	
 	const fallbackName = user.email ? user.email.split("@")[0] : "User";
 	const meta =
 		typeof user.user_metadata === "object" && user.user_metadata !== null
@@ -95,7 +95,7 @@ export default async function ProfileMePage() {
 		}
 	}
 
-	// Canonical profile URL uses username.
+	
 	const { data: profileRow } = await supabase
 		.from("profiles")
 		.select("id, username")

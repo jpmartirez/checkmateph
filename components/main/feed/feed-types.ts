@@ -1,10 +1,19 @@
 export type PostCategory = "OPINION" | "CLAIM";
+
+/**
+ * Status tags that can appear on a post.
+ * OPINION posts: no status tags.
+ * CLAIM posts: start as UNDER_REVIEW; gain VERIFIED_SOURCE if any source is in the registry;
+ *   gain DEBATED when a COUNTER_CLAIM comment is added; gain SUPPORTED/DISPUTED after expert review.
+ * INCOHERENT_SOURCE is applied by AI verification (future integration).
+ */
 export type PostStatus =
-	| "SUPPORTED"
-	| "DEBATED"
-	| "DISPUTED"
 	| "UNDER_REVIEW"
-	| "VERIFIED";
+	| "VERIFIED_SOURCE"
+	| "INCOHERENT_SOURCE"
+	| "SUPPORTED"
+	| "DISPUTED"
+	| "DEBATED";
 
 export type CommentType = "OPINION" | "CLAIM" | "COUNTER_CLAIM";
 
@@ -25,6 +34,7 @@ export interface Post {
 	category: PostCategory;
 	sources?: PostSource[];
 	consensus?: PostConsensus;
+	isLikedByCurrentUser?: boolean;
 	stats: {
 		reactions: number;
 		comments: number;
@@ -53,6 +63,8 @@ export interface PostComment {
 	author: PostAuthor;
 	content: string;
 	type: CommentType;
+	/** INCOHERENT_SOURCE applied when AI detects unrelated source (future). */
+	status?: PostStatus[];
 	createdAt: string;
 	sources?: CommentSource[];
 }

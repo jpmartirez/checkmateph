@@ -74,9 +74,9 @@ const SideBar = ({ isOpen, onClose }: SideBarProps) => {
 	}, []);
 
 	const navItems = [
-		{ label: "Home", href: "/feed", icon: Home },
-		{ label: "Verified Sources", href: "/sources", icon: BadgeCheck },
-		{ label: "Government Officials", href: "/politicians", icon: UserCheck },
+		{ label: "Home", href: "/feed", icon: Home, iconClass: "text-violet-500" },
+		{ label: "Verified Sources", href: "/sources", icon: BadgeCheck, iconClass: "text-blue-500" },
+		{ label: "Government Officials", href: "/politicians", icon: UserCheck, iconClass: "text-green-500" },
 	];
 
 	const shortcuts = [
@@ -95,7 +95,7 @@ const SideBar = ({ isOpen, onClose }: SideBarProps) => {
 			/>
 			<aside
 				className={cn(
-					"fixed left-0 top-(--navbar-height) z-50 h-[calc(100vh-var(--navbar-height))] w-(--sidebar-width) border-r border-(--border-subtle) bg-(--bg-secondary) text-(--text-primary) transition-transform",
+					"fixed left-0 top-(--navbar-height) z-50 h-[calc(100vh-var(--navbar-height))] w-(--sidebar-width) border-r border-(--border-subtle)  text-(--text-primary) transition-transform",
 					isOpen ? "translate-x-0" : "-translate-x-full",
 					"md:translate-x-0",
 				)}
@@ -131,7 +131,7 @@ const SideBar = ({ isOpen, onClose }: SideBarProps) => {
 									)}
 								>
 									<Link href={item.href}>
-										<Icon className="h-5 w-5" />
+										<Icon className={cn("h-5 w-5", item.iconClass)} />
 										<span>{item.label}</span>
 									</Link>
 								</Button>

@@ -1,112 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type {
-	Post,
-	PostCategory,
-	PostSource,
-	PostStatus,
-} from "@/components/main/feed/feed-types";
+import type { Post, PostCategory, PostSource, PostStatus } from "@/components/main/feed/feed-types";
 
-function formatTimeAgo(iso: string): string {
-	const date = new Date(iso);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffSeconds = Math.max(0, Math.floor(diffMs / 1000));
 
-	const minutes = Math.floor(diffSeconds / 60);
-	const hours = Math.floor(minutes / 60);
-	const days = Math.floor(hours / 24);
-
-	if (minutes < 1) return "Just now";
-	if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
-	if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
-	if (days === 1) return "Yesterday";
-	return `${days} days ago`;
-}
-
-function mapDbPostToUi(row: unknown): Post | null {
-	if (!isRecord(row)) return null;
-
-	const id = getString(row.id);
-	const createdAt = getString(row.created_at);
-	const category = getString(row.category) as PostCategory | undefined;
-	const content = getString(row.content);
-	const imageUrl = getString(row.image_url);
-
-	if (!id || !createdAt || !content) return null;
-	if (category !== "CLAIM" && category !== "OPINION") return null;
-
-	const statusRaw = row.status;
-	const status = Array.isArray(statusRaw)
-		? (statusRaw.filter((s) => typeof s === "string") as PostStatus[])
-		: [];
-
-	// `author` sometimes comes back as an object or a 1-item array, depending on PostgREST inference.
-	const authorRaw = row.author;
-	const author = isRecord(authorRaw)
-		? authorRaw
-		: Array.isArray(authorRaw) && authorRaw.length > 0 && isRecord(authorRaw[0])
-			? authorRaw[0]
-			: null;
-
-	const authorId = getString(author?.id) ?? "unknown";
-	const authorName = getString(author?.display_name) ?? "Unknown";
-	const authorAvatar =
-		getString(author?.avatar_url) ?? `https://i.pravatar.cc/150?u=${authorId}`;
-	const authorRole = getString(author?.role) ?? undefined;
-
-	const reactionsCount =
-		typeof row.reactions_count === "number" ? row.reactions_count : 0;
-	const commentsCount =
-		typeof row.comments_count === "number" ? row.comments_count : 0;
-	const sharesCount = typeof row.shares_count === "number" ? row.shares_count : 0;
-
-	const sourcesRaw = row.sources;
-	const sources = Array.isArray(sourcesRaw) ? sourcesRaw : [];
-	const referencesCount = sources.length;
-	const mappedSources = sources
-		.map((source): PostSource | null => {
-			if (!isRecord(source)) return null;
-			const sourceId = getString(source.id);
-			const title = getString(source.title);
-			const url = getString(source.url);
-			if (!sourceId || !title || !url) return null;
-			const isVerified =
-				typeof source.is_verified === "boolean" ? source.is_verified : undefined;
-			return {
-				id: sourceId,
-				title,
-				url,
-				...(typeof isVerified === "boolean" ? { isVerified } : {}),
-			};
-		})
-		.filter((source): source is PostSource => source !== null);
-
-	return {
-		id,
-		author: {
-			id: authorId,
-			name: authorName,
-			avatarUrl: authorAvatar,
-			role: authorRole,
-		},
-		timeAgo: formatTimeAgo(createdAt),
-		contentText: content,
-		image: imageUrl ?? undefined,
-		status: status.length ? status : undefined,
-		category,
-		sources: mappedSources.length ? mappedSources : undefined,
-		stats: {
-			reactions: reactionsCount,
-			comments: commentsCount,
-			shares: sharesCount,
-			references: referencesCount,
-		},
-	};
-}
-
-const postSelect =
-	"id, created_at, category, content, image_url, status, reactions_count, comments_count, shares_count, author:profiles!posts_author_id_fkey(id, display_name, avatar_url, role), sources:post_sources(id, title, url, is_verified)";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -116,28 +12,111 @@ function getString(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;
 }
 
-function getSources(value: unknown): Array<{ title: string; url: string }> {
-	if (!Array.isArray(value)) return [];
-	return value
-		.map((item) => {
-			if (!isRecord(item)) return null;
-			const title = getString(item.title);
-			const url = getString(item.url);
-			if (!title || !url) return null;
-			return { title, url };
-		})
-		.filter((x): x is { title: string; url: string } => x !== null);
+function formatTimeAgo(iso: string): string {
+	const date = new Date(iso);
+	const diffSeconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+	const minutes = Math.floor(diffSeconds / 60);
+	const hours = Math.floor(minutes / 60);
+	const days = Math.floor(hours / 24);
+	if (minutes < 1) return "Just now";
+	if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"} ago`;
+	if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+	if (days === 1) return "Yesterday";
+	return `${days} days ago`;
 }
 
 function normalizeHost(url: string): string | null {
 	try {
-		const parsed = new URL(url);
-		const host = parsed.hostname.toLowerCase();
+		const host = new URL(url).hostname.toLowerCase();
 		return host.startsWith("www.") ? host.slice(4) : host;
 	} catch {
 		return null;
 	}
 }
+
+function parseSources(value: unknown): Array<{ title: string; url: string }> {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((item) => {
+			if (!isRecord(item)) return null;
+			const title = getString(item.title)?.trim();
+			const url = getString(item.url)?.trim();
+			if (!title || !url) return null;
+			return { title, url };
+		})
+		.filter((x): x is { title: string; url: string } => x !== null)
+		.slice(0, 20);
+}
+
+// Joined select used whenever we fetch posts.
+const POST_SELECT =
+	"id, created_at, category, content, image_url, status, reactions_count, comments_count, shares_count, " +
+	"author:profiles!posts_author_id_fkey(id, display_name, avatar_url, role), " +
+	"sources:post_sources(id, title, url, is_verified)";
+
+function mapRowToPost(row: unknown): Post | null {
+	if (!isRecord(row)) return null;
+
+	const id = getString(row.id);
+	const createdAt = getString(row.created_at);
+	const category = getString(row.category) as PostCategory | undefined;
+	const content = getString(row.content);
+
+	if (!id || !createdAt || !content) return null;
+	if (category !== "CLAIM" && category !== "OPINION") return null;
+
+	const status = Array.isArray(row.status)
+		? (row.status.filter((s) => typeof s === "string") as PostStatus[])
+		: [];
+
+	const authorRaw = row.author;
+	const authorObj = isRecord(authorRaw)
+		? authorRaw
+		: Array.isArray(authorRaw) && isRecord(authorRaw[0])
+			? authorRaw[0]
+			: null;
+
+	const authorId = getString(authorObj?.id) ?? "unknown";
+	const authorName = getString(authorObj?.display_name) ?? "Unknown";
+	const authorAvatar = getString(authorObj?.avatar_url) ?? `https://i.pravatar.cc/150?u=${authorId}`;
+	const authorRole = getString(authorObj?.role);
+
+	const sourcesRaw = Array.isArray(row.sources) ? row.sources : [];
+	const sources = sourcesRaw
+		.map((s): PostSource | null => {
+			if (!isRecord(s)) return null;
+			const sid = getString(s.id);
+			const title = getString(s.title);
+			const url = getString(s.url);
+			if (!sid || !title || !url) return null;
+			return {
+				id: sid,
+				title,
+				url,
+				...(typeof s.is_verified === "boolean" ? { isVerified: s.is_verified } : {}),
+			};
+		})
+		.filter((s): s is PostSource => s !== null);
+
+	return {
+		id,
+		author: { id: authorId, name: authorName, avatarUrl: authorAvatar, role: authorRole },
+		timeAgo: formatTimeAgo(createdAt),
+		contentText: content,
+		image: getString(row.image_url),
+		status: status.length ? status : undefined,
+		category,
+		sources: sources.length ? sources : undefined,
+		stats: {
+			reactions: typeof row.reactions_count === "number" ? row.reactions_count : 0,
+			comments: typeof row.comments_count === "number" ? row.comments_count : 0,
+			shares: typeof row.shares_count === "number" ? row.shares_count : 0,
+			references: sources.length,
+		},
+	};
+}
+
+
 
 export async function GET(request: Request) {
 	const supabase = await createClient();
@@ -147,31 +126,50 @@ export async function GET(request: Request) {
 	}
 
 	const url = new URL(request.url);
-	const limitParam = url.searchParams.get("limit");
-	const limit = Math.min(
-		50,
-		Math.max(1, Number.parseInt(limitParam ?? "20", 10) || 20),
-	);
+	const limit = Math.min(50, Math.max(1, Number.parseInt(url.searchParams.get("limit") ?? "20", 10) || 20));
+	const q = url.searchParams.get("q")?.trim() ?? "";
 
-	const { data, error } = await supabase
+	const baseQuery = supabase
 		.from("posts")
-		.select(postSelect)
+		.select(POST_SELECT)
 		.order("created_at", { ascending: false })
 		.limit(limit);
 
+	const { data, error } = await (q
+		? baseQuery.ilike("content", `%${q}%`)
+		: baseQuery);
+
 	if (error) {
-		return NextResponse.json(
-			{ error: error.message },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: error.message }, { status: 500 });
 	}
 
-	const posts = (data ?? [])
-		.map((row) => mapDbPostToUi(row))
-		.filter((p): p is Post => p !== null);
-	return NextResponse.json({ posts });
+	const posts = (data ?? []).map(mapRowToPost).filter((p): p is Post => p !== null);
+
+	
+	let likedSet = new Set<string>();
+	if (posts.length > 0) {
+		const { data: likedRows } = await supabase
+			.from("post_reactions")
+			.select("post_id")
+			.eq("user_id", auth.user.id)
+			.in("post_id", posts.map((p) => p.id));
+		likedSet = new Set((likedRows ?? []).map((r) => (r as { post_id: string }).post_id));
+	}
+
+	return NextResponse.json({
+		posts: posts.map((p) => ({ ...p, isLikedByCurrentUser: likedSet.has(p.id) })),
+	});
 }
 
+// ---------------------------------------------------------------------------
+// POST /api/posts  — create a new post
+//
+// Body: { category, contentText, imageUrl?, sources? }
+//
+// OPINION: sources optional, no status tags.
+// CLAIM:   sources required (≥ 1), starts as UNDER_REVIEW; gains VERIFIED_SOURCE
+//          if any source domain is in the verified_sources registry.
+// ---------------------------------------------------------------------------
 export async function POST(request: Request) {
 	const supabase = await createClient();
 	const {
@@ -189,20 +187,20 @@ export async function POST(request: Request) {
 	} catch {
 		return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
 	}
-
 	if (!isRecord(body)) {
 		return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
 	}
 
 	const category = body.category as PostCategory | undefined;
-	const contentText = getString(body.contentText);
-	const imageUrl = getString(body.imageUrl);
-	const sources = getSources(body.sources);
+	const contentText = getString(body.contentText)?.trim();
+	const imageUrl = getString(body.imageUrl)?.trim() || null;
+	const sources = parseSources(body.sources);
 
-	if (category !== "CLAIM" && category !== "OPINION") {
-		return NextResponse.json({ error: "Invalid category" }, { status: 400 });
+	// --- Validation ---
+	if (category !== "OPINION" && category !== "CLAIM") {
+		return NextResponse.json({ error: "category must be OPINION or CLAIM" }, { status: 400 });
 	}
-	if (!contentText || typeof contentText !== "string" || !contentText.trim()) {
+	if (!contentText) {
 		return NextResponse.json({ error: "Content is required" }, { status: 400 });
 	}
 	if (category === "CLAIM" && sources.length === 0) {
@@ -212,34 +210,30 @@ export async function POST(request: Request) {
 		);
 	}
 
-	// Ensure the user has a profile row (trigger should create it, but this makes the API robust).
-	const fallbackName = user.email ? user.email.split("@")[0] : "User";
-	const userMeta = (isRecord(user.user_metadata)
-		? user.user_metadata
-		: {}) as Record<string, unknown>;
-	const metaDisplayName = getString(userMeta.display_name);
-	const metaName = getString(userMeta.name);
-	const metaAvatarUrl = getString(userMeta.avatar_url);
+	// --- Ensure profile row exists (created by DB trigger on signup; this is a safety net) ---
+	const userMeta = isRecord(user.user_metadata) ? user.user_metadata : {};
+	const displayName =
+		getString(userMeta.display_name) ??
+		getString(userMeta.name) ??
+		(user.email ? user.email.split("@")[0] : "User");
 
-	await supabase.from("profiles").upsert(
-		{
-			id: user.id,
-			display_name: metaDisplayName ?? metaName ?? fallbackName,
-			avatar_url: metaAvatarUrl ?? null,
-		},
-		{ onConflict: "id" },
-	);
+	await supabase
+		.from("profiles")
+		.upsert({ id: user.id, display_name: displayName }, { onConflict: "id" });
 
-	const initialStatus: PostStatus[] =
-		category === "CLAIM" ? ["UNDER_REVIEW"] : [];
+	// --- Determine initial post status ---
+	// OPINION posts have no status tags.
+	// CLAIM posts start as UNDER_REVIEW; we may also add VERIFIED_SOURCE below.
+	const initialStatus: PostStatus[] = category === "CLAIM" ? ["UNDER_REVIEW"] : [];
 
+	// --- Insert post ---
 	const { data: inserted, error: insertError } = await supabase
 		.from("posts")
 		.insert({
 			author_id: user.id,
 			category,
-			content: contentText.trim(),
-			image_url: imageUrl ?? null,
+			content: contentText,
+			image_url: imageUrl,
 			status: initialStatus,
 		})
 		.select("id")
@@ -252,61 +246,56 @@ export async function POST(request: Request) {
 		);
 	}
 
-	const normalizedSources = sources
-		.map((s) => ({
-			title: String(s?.title ?? "").trim(),
-			url: String(s?.url ?? "").trim(),
-		}))
-		.filter((s) => s.title && s.url)
-		.slice(0, 20);
+	// --- Insert sources and check verified registry ---
+	let hasVerifiedSource = false;
 
-	if (normalizedSources.length > 0) {
+	if (sources.length > 0) {
 		const hostByUrl = new Map<string, string>();
-		const hosts = normalizedSources
-			.map((source) => {
-				const host = normalizeHost(source.url);
-				if (host) {
-					hostByUrl.set(source.url, host);
-				}
-				return host;
-			})
-			.filter((host): host is string => Boolean(host));
+		const hosts: string[] = [];
 
-		const { data: verifiedHosts } = await supabase
+		for (const source of sources) {
+			const host = normalizeHost(source.url);
+			if (host) {
+				hostByUrl.set(source.url, host);
+				hosts.push(host);
+			}
+		}
+
+		const { data: verifiedRows } = await supabase
 			.from("verified_sources")
 			.select("host")
 			.in("host", hosts.length ? hosts : ["__none__"]);
 
-		const verifiedHostSet = new Set(
-			(verifiedHosts ?? [])
-				.map((row) => (isRecord(row) ? getString(row.host) : undefined))
-				.filter((host): host is string => Boolean(host)),
+		const verifiedHosts = new Set(
+			(verifiedRows ?? []).map((r) => (isRecord(r) ? getString(r.host) : undefined)).filter(Boolean) as string[],
 		);
 
 		const { error: sourcesError } = await supabase.from("post_sources").insert(
-			normalizedSources.map((source) => {
-				const host = hostByUrl.get(source.url) ?? null;
-				return {
-					post_id: inserted.id,
-					title: source.title,
-					url: source.url,
-					host,
-					is_verified: host ? verifiedHostSet.has(host) : false,
-				};
+			sources.map((s) => {
+				const host = hostByUrl.get(s.url) ?? null;
+				const isVerified = host ? verifiedHosts.has(host) : false;
+				if (isVerified) hasVerifiedSource = true;
+				return { post_id: inserted.id, title: s.title, url: s.url, host, is_verified: isVerified };
 			}),
 		);
 
 		if (sourcesError) {
-			return NextResponse.json(
-				{ error: sourcesError.message },
-				{ status: 500 },
-			);
+			return NextResponse.json({ error: sourcesError.message }, { status: 500 });
+		}
+
+		// Add VERIFIED_SOURCE tag if any source is from the registry.
+		if (category === "CLAIM" && hasVerifiedSource) {
+			await supabase
+				.from("posts")
+				.update({ status: [...initialStatus, "VERIFIED_SOURCE"] })
+				.eq("id", inserted.id);
 		}
 	}
 
+	// --- Return the created post ---
 	const { data: created, error: createdError } = await supabase
 		.from("posts")
-		.select(postSelect)
+		.select(POST_SELECT)
 		.eq("id", inserted.id)
 		.single();
 
@@ -317,16 +306,14 @@ export async function POST(request: Request) {
 		);
 	}
 
-	const post = mapDbPostToUi(created);
+	const post = mapRowToPost(created);
 	if (!post) {
-		return NextResponse.json(
-			{ error: "Failed to map created post" },
-			{ status: 500 },
-		);
+		return NextResponse.json({ error: "Failed to map created post" }, { status: 500 });
 	}
 
-	return NextResponse.json({ post });
+	return NextResponse.json({ post }, { status: 201 });
 }
+
 
 export async function DELETE(request: Request) {
 	const supabase = await createClient();
@@ -339,9 +326,8 @@ export async function DELETE(request: Request) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	const url = new URL(request.url);
-	const id = url.searchParams.get("id");
-	if (!id || typeof id !== "string") {
+	const id = new URL(request.url).searchParams.get("id");
+	if (!id) {
 		return NextResponse.json({ error: "Missing id" }, { status: 400 });
 	}
 
@@ -352,18 +338,13 @@ export async function DELETE(request: Request) {
 		.single();
 
 	if (existingError || !existing) {
-		return NextResponse.json({ error: "Not found" }, { status: 404 });
+		return NextResponse.json({ error: "Post not found" }, { status: 404 });
 	}
-
 	if (existing.author_id !== user.id) {
 		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 	}
 
-	const { error: deleteError } = await supabase
-		.from("posts")
-		.delete()
-		.eq("id", id);
-
+	const { error: deleteError } = await supabase.from("posts").delete().eq("id", id);
 	if (deleteError) {
 		return NextResponse.json({ error: deleteError.message }, { status: 500 });
 	}

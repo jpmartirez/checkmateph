@@ -53,7 +53,7 @@ const PoliticiansGrid = ({ politicians }: PoliticiansGridProps) => {
 							size="sm"
 							className="w-full bg-brand text-white hover:bg-brand-hover"
 						>
-							<Link href={`/politicians/${politician.id}`}>View Profile</Link>
+							<Link href={`/profile/politicians/${politician.id}`}>View Profile</Link>
 						</Button>
 					</CardFooter>
 				</Card>

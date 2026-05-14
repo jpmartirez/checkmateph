@@ -226,7 +226,7 @@ export default async function ProfilePage({
 		.limit(50);
 
 	if (postsError) {
-		// Keep page resilient even if posts query fails.
+		
 		console.error("Failed to load profile posts", postsError.message);
 	}
 
@@ -271,5 +271,5 @@ export default async function ProfilePage({
 		posts,
 	};
 
-	return <ProfilePageClient profile={profile} />;
+	return <ProfilePageClient profile={profile} isOwnProfile={profileDb.id === user.id} />;
 }
