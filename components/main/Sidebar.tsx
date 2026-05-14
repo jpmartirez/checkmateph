@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -13,14 +13,70 @@ import {
 } from "@/lib/icons/icons";
 import { Button } from "@/components/ui/button";
 import { SideBarProps } from "@/components/main/sidebar-types";
+import { createClient } from "@/lib/supabase/client";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+function getInitials(name: string): string {
+	const parts = name.trim().split(/\s+/).filter(Boolean);
+	if (parts.length === 0) return "U";
+	if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase();
+	return `${parts[0]!.slice(0, 1)}${parts[parts.length - 1]!.slice(0, 1)}`.toUpperCase();
+}
 
 const SideBar = ({ isOpen, onClose }: SideBarProps) => {
 	const pathname = usePathname();
+	const [displayName, setDisplayName] = useState<string>("User");
+	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+	const initials = useMemo(() => getInitials(displayName), [displayName]);
+
+	useEffect(() => {
+		let cancelled = false;
+		const supabase = createClient();
+
+		const run = async () => {
+			const { data } = await supabase.auth.getUser();
+			const user = data.user;
+			if (!user) return;
+
+			const meta =
+				typeof user.user_metadata === "object" && user.user_metadata !== null
+					? (user.user_metadata as Record<string, unknown>)
+					: {};
+			const metaDisplayName =
+				typeof meta.display_name === "string" ? meta.display_name : undefined;
+			const metaName = typeof meta.name === "string" ? meta.name : undefined;
+			const metaAvatarUrl =
+				typeof meta.avatar_url === "string" ? meta.avatar_url : undefined;
+
+			// Prefer DB profile values (first+last name -> display_name)
+			const { data: profile } = await supabase
+				.from("profiles")
+				.select("display_name, avatar_url")
+				.eq("id", user.id)
+				.single();
+
+			if (cancelled) return;
+			setDisplayName(
+				profile?.display_name ?? metaDisplayName ?? metaName ?? user.email ?? "User",
+			);
+			setAvatarUrl(
+				profile?.avatar_url ?? metaAvatarUrl ?? (user.id ? `https://i.pravatar.cc/150?u=${user.id}` : null),
+			);
+		};
+
+		run().catch(() => {
+			// ignore; keep defaults
+		});
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const navItems = [
-		{ label: "Home", href: "/feed", icon: Home },
-		{ label: "Verified Sources", href: "/sources", icon: BadgeCheck },
-		{ label: "Government Officials", href: "/politicians", icon: UserCheck },
+		{ label: "Home", href: "/feed", icon: Home, iconClass: "text-violet-500" },
+		{ label: "Verified Sources", href: "/sources", icon: BadgeCheck, iconClass: "text-blue-500" },
+		{ label: "Government Officials", href: "/politicians", icon: UserCheck, iconClass: "text-green-500" },
 	];
 
 	const shortcuts = [
@@ -39,16 +95,21 @@ const SideBar = ({ isOpen, onClose }: SideBarProps) => {
 			/>
 			<aside
 				className={cn(
-					"fixed left-0 top-(--navbar-height) z-50 h-[calc(100vh-var(--navbar-height))] w-(--sidebar-width) border-r border-(--border-subtle) bg-(--bg-secondary) text-(--text-primary) transition-transform",
+					"fixed left-0 top-(--navbar-height) z-50 h-[calc(100vh-var(--navbar-height))] w-(--sidebar-width) border-r border-(--border-subtle)  text-(--text-primary) transition-transform",
 					isOpen ? "translate-x-0" : "-translate-x-full",
 					"md:translate-x-0",
 				)}
 			>
 				<div className="flex h-full flex-col px-4 py-6">
 					<div className="flex items-center gap-3 px-2">
-						<div className="h-11 w-11 rounded-full bg-(--bg-tertiary)" />
+						<Avatar className="h-11 w-11">
+							<AvatarImage src={avatarUrl ?? undefined} alt={displayName} />
+							<AvatarFallback className="bg-(--bg-tertiary) text-(--text-primary)">
+								{initials}
+							</AvatarFallback>
+						</Avatar>
 						<div className="min-w-0">
-							<p className="truncate text-sm font-semibold">Dave Capistrano</p>
+							<p className="truncate text-sm font-semibold">{displayName}</p>
 						</div>
 					</div>
 
@@ -70,7 +131,7 @@ const SideBar = ({ isOpen, onClose }: SideBarProps) => {
 									)}
 								>
 									<Link href={item.href}>
-										<Icon className="h-5 w-5" />
+										<Icon className={cn("h-5 w-5", item.iconClass)} />
 										<span>{item.label}</span>
 									</Link>
 								</Button>

@@ -1,4 +1,7 @@
-import React from "react";
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
 import {
 	Card,
 	CardContent,
@@ -9,15 +12,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
 	Globe,
-	MoreHorizontal,
 	MessageSquare,
+	MoreHorizontal,
 	Share2,
 	ThumbsUp,
 } from "lucide-react";
 import { Post } from "./feed-types";
+import { PostCommentSection } from "./PostCommentSection";
 
-// Helper function for status badge styling
 const getStatusBadgeVariant = (status: string) => {
 	switch (status) {
 		case "SUPPORTED":
@@ -33,25 +42,47 @@ const getStatusBadgeVariant = (status: string) => {
 	}
 };
 
-export const PostCard = ({ post }: { post: Post }) => {
+export const PostCard = ({
+	post,
+	currentUserId,
+	isLiked = false,
+	onDelete,
+	onLike,
+	onOpenDetails,
+	onCommentAdded,
+}: {
+	post: Post;
+	currentUserId?: string | null;
+	isLiked?: boolean;
+	onDelete?: (postId: string) => void;
+	onLike?: (postId: string) => void;
+	onOpenDetails?: (postId: string) => void;
+	onCommentAdded?: (postId: string) => void;
+}) => {
+	const isAuthor = Boolean(currentUserId && post.author.id === currentUserId);
+	const [showComments, setShowComments] = useState(false);
+
 	return (
 		<Card className="mb-6 bg-card border-border/50">
 			<CardHeader className="p-4 pb-2">
 				<div className="flex justify-between items-start">
-					<div className="flex gap-3">
+					<Link
+						href={post.author.id && post.author.id !== "unknown" ? `/profile/${post.author.id}` : "#"}
+						className="flex gap-3 hover:opacity-80 transition-opacity"
+					>
 						<Avatar>
 							<AvatarImage src={post.author.avatarUrl} alt={post.author.name} />
 							<AvatarFallback>{post.author.name[0]}</AvatarFallback>
 						</Avatar>
 						<div>
-							<h3 className="font-semibold text-sm">{post.author.name}</h3>
+							<h3 className="font-semibold text-sm hover:underline">{post.author.name}</h3>
 							<div className="flex items-center text-xs text-muted-foreground gap-1">
 								<span>{post.timeAgo}</span>
 								<span>·</span>
 								<Globe className="w-3 h-3" />
 							</div>
 						</div>
-					</div>
+					</Link>
 
 					<div className="flex items-center gap-2">
 						{post.status?.map((statusItem) => (
@@ -63,13 +94,29 @@ export const PostCard = ({ post }: { post: Post }) => {
 								{statusItem.replace("_", " ")}
 							</Badge>
 						))}
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-8 w-8 text-muted-foreground"
-						>
-							<MoreHorizontal className="w-4 h-4" />
-						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 text-muted-foreground"
+								>
+									<MoreHorizontal className="w-4 h-4" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								{isAuthor ? (
+									<DropdownMenuItem
+										variant="destructive"
+										onClick={() => onDelete?.(post.id)}
+									>
+										Delete
+									</DropdownMenuItem>
+								) : (
+									<DropdownMenuItem disabled>No actions</DropdownMenuItem>
+								)}
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
 				</div>
 			</CardHeader>
@@ -89,6 +136,7 @@ export const PostCard = ({ post }: { post: Post }) => {
 						<Button
 							variant="link"
 							className="p-0 h-auto text-purple-400 text-xs font-semibold mt-1"
+							onClick={() => onOpenDetails?.(post.id)}
 						>
 							View Sources & References
 						</Button>
@@ -106,47 +154,77 @@ export const PostCard = ({ post }: { post: Post }) => {
 				)}
 			</CardContent>
 
-			<CardFooter className="flex flex-col p-4 pt-3">
-				{/* Stats Row */}
-				<div className="flex justify-between items-center w-full text-xs text-muted-foreground mb-3 pb-3 border-b border-border/50">
-					<div className="flex items-center gap-1.5">
-						<div className="bg-purple-500 rounded-full p-0.5">
-							<ThumbsUp className="w-3 h-3 text-white fill-white" />
+			<CardFooter className="flex flex-col p-0">
+				<div className="flex flex-col w-full px-4 pt-3 pb-1">
+					{/* Stats row */}
+					<div className="flex justify-between items-center w-full text-xs text-muted-foreground mb-3 pb-3 border-b border-border/50">
+						<div className="flex items-center gap-1.5">
+							<div className="bg-purple-500 rounded-full p-0.5">
+								<ThumbsUp className="w-3 h-3 text-white fill-white" />
+							</div>
+							<span>{post.stats.reactions} {post.stats.reactions === 1 ? "like" : "likes"}</span>
 						</div>
-						<span>{post.stats.reactions} others</span>
+						<div className="flex gap-2">
+							{post.stats.comments > 0 && (
+								<button
+									type="button"
+									className="hover:underline"
+									onClick={() => setShowComments((v) => !v)}
+								>
+									{post.stats.comments} {post.stats.comments === 1 ? "comment" : "comments"}
+								</button>
+							)}
+							{post.stats.references > 0 && (
+								<span>{post.stats.references} references</span>
+							)}
+						</div>
 					</div>
-					<div className="flex gap-2">
-						{post.stats.references > 0 && (
-							<span>{post.stats.references} references · </span>
-						)}
-						<span>{post.stats.shares} shares</span>
+
+					{/* Actions row */}
+					<div className="flex justify-between w-full mb-1">
+						<Button
+							variant="ghost"
+							className={`flex-1 rounded-none gap-2 ${
+								isLiked
+									? "text-purple-500 hover:text-purple-400"
+									: "text-muted-foreground hover:text-foreground"
+							}`}
+							onClick={() => onLike?.(post.id)}
+						>
+							<ThumbsUp
+								className="w-4 h-4"
+								fill={isLiked ? "currentColor" : "none"}
+							/>
+							{isLiked ? "Liked" : "Like"}
+						</Button>
+						<Button
+							variant="ghost"
+							className={`flex-1 rounded-none gap-2 ${
+								showComments
+									? "text-purple-500 hover:text-purple-400"
+									: "text-muted-foreground hover:text-foreground"
+							}`}
+							onClick={() => setShowComments((v) => !v)}
+						>
+							<MessageSquare className="w-4 h-4" />
+							Comment
+						</Button>
+						<Button
+							variant="ghost"
+							className="flex-1 rounded-none gap-2 text-muted-foreground hover:text-foreground"
+						>
+							<Share2 className="w-4 h-4" />
+							Share
+						</Button>
 					</div>
 				</div>
 
-				{/* Actions Row */}
-				<div className="flex justify-between w-full">
-					<Button
-						variant="ghost"
-						className="flex-1 rounded-none text-muted-foreground hover:text-foreground"
-					>
-						<ThumbsUp className="w-4 h-4 mr-2" />
-						Like
-					</Button>
-					<Button
-						variant="ghost"
-						className="flex-1 rounded-none text-muted-foreground hover:text-foreground"
-					>
-						<MessageSquare className="w-4 h-4 mr-2" />
-						Comments
-					</Button>
-					<Button
-						variant="ghost"
-						className="flex-1 rounded-none text-muted-foreground hover:text-foreground"
-					>
-						<Share2 className="w-4 h-4 mr-2" />
-						Share
-					</Button>
-				</div>
+				{showComments && (
+					<PostCommentSection
+						postId={post.id}
+						onCommentAdded={() => onCommentAdded?.(post.id)}
+					/>
+				)}
 			</CardFooter>
 		</Card>
 	);

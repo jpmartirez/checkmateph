@@ -46,91 +46,191 @@ export const LOCATION_LABELS: Record<PoliticianLocation, string> = {
 
 export const POLITICIANS: Politician[] = [
 	{
-		id: "maya-delacruz",
-		name: "Maya Dela Cruz",
-		role: "Secretary of Public Services",
-		office: "Department of Public Services",
+		id: "ferdinand-marcos-jr",
+		name: "Ferdinand Marcos Jr.",
+		role: "President of the Philippines",
+		office: "Office of the President",
 		branch: "executive",
 		location: "national",
-		imageUrl:
-			"https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=800&q=80",
+		imageUrl: "/officials/ferdinand-marcos-jr.jpg",
 		verified: true,
+		background:
+			"Former Ilocos Norte governor, congressman, and senator who became the 17th President of the Philippines in 2022. He is the son of former President Ferdinand Marcos Sr. and former First Lady Imelda Marcos.",
+		education:
+			"Studied at University of Oxford and received a Special Diploma in Social Studies. He also attended the Wharton School of the University of Pennsylvania but did not complete the MBA program.",
+		knownFor:
+			"Infrastructure projects, economic programs, and digitalization initiatives under his administration.",
 	},
 	{
-		id: "adrian-santos",
-		name: "Adrian Santos",
-		role: "District Representative",
-		office: "Central District",
-		branch: "legislative",
-		location: "metro-manila",
-		imageUrl:
-			"https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80",
-		verified: true,
-	},
-	{
-		id: "lia-fernandez",
-		name: "Lia Fernandez",
-		role: "Associate Justice",
-		office: "Court of Appeals",
-		branch: "judiciary",
-		location: "national",
-		imageUrl:
-			"https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=800&q=80",
-		verified: true,
-	},
-	{
-		id: "kenneth-reyes",
-		name: "Kenneth Reyes",
-		role: "City Mayor",
-		office: "Caloocan City",
-		branch: "local",
-		location: "metro-manila",
-		imageUrl:
-			"https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=800&q=80",
-		verified: true,
-	},
-	{
-		id: "alicia-lim",
-		name: "Alicia Lim",
-		role: "Provincial Governor",
-		office: "Ilocos Norte",
-		branch: "local",
-		location: "north-luzon",
-		imageUrl:
-			"https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=800&q=80",
-		verified: false,
-	},
-	{
-		id: "enzo-navarro",
-		name: "Enzo Navarro",
-		role: "Party-list Representative",
-		office: "Youth Futures",
-		branch: "legislative",
-		location: "national",
-		imageUrl:
-			"https://images.unsplash.com/photo-1527980965255-d3b416303d12?auto=format&fit=crop&w=800&q=80",
-		verified: true,
-	},
-	{
-		id: "mira-velasco",
-		name: "Mira Velasco",
-		role: "Regional Administrator",
-		office: "Western Visayas",
+		id: "sara-duterte",
+		name: "Sara Duterte",
+		role: "Vice President of the Philippines",
+		office: "Office of the Vice President",
 		branch: "executive",
+		location: "national",
+		imageUrl: "/officials/sara-duterte.jpg",
+		verified: true,
+		background:
+			"Former mayor of Davao City known for her strong leadership style and local governance programs. She is the daughter of former President Rodrigo Duterte.",
+		education:
+			"Earned a degree in Respiratory Therapy from San Pedro College and completed law studies at San Sebastian College–Recoletos.",
+		knownFor:
+			"Education advocacy, peace and order programs, and youth-related initiatives.",
+	},
+	{
+		id: "francis-escudero",
+		name: "Francis Escudero",
+		role: "Senate President",
+		office: "Senate of the Philippines",
+		branch: "legislative",
+		location: "national",
+		imageUrl: "/officials/francis-escudero.jpg",
+		verified: true,
+		background:
+			"Experienced lawyer and legislator who served as representative of Sorsogon before becoming senator.",
+		education:
+			"Graduated in Political Science from University of the Philippines Diliman and studied law there as well.",
+		knownFor:
+			"Legislative reforms, public policy discussions, and budget-related measures.",
+	},
+	{
+		id: "martin-romualdez",
+		name: "Martin Romualdez",
+		role: "Speaker of the House of Representatives",
+		office: "House of Representatives",
+		branch: "legislative",
+		location: "national",
+		imageUrl: "/officials/martin-romualdez.jpg",
+		verified: true,
+		background:
+			"Leyte representative and cousin of President Marcos Jr. who leads the House of Representatives.",
+		education:
+			"Studied at Cornell University and earned his law degree from University of the Philippines.",
+		knownFor:
+			"Supporting administration bills and leading legislative priorities in Congress.",
+	},
+	{
+		id: "risa-hontiveros",
+		name: "Risa Hontiveros",
+		role: "Senator",
+		office: "Senate of the Philippines",
+		branch: "legislative",
+		location: "national",
+		imageUrl: "/officials/risa-hontiveros.png",
+		verified: true,
+		background:
+			"Former journalist and activist recognized for advocating women's rights, healthcare, and social justice.",
+		education:
+			"Graduated in Social Sciences from Ateneo de Manila University.",
+		knownFor:
+			"Mental health advocacy, gender equality laws, and healthcare reforms.",
+	},
+	{
+		id: "benhur-abalos",
+		name: "Benhur Abalos",
+		role: "Secretary of the Interior and Local Government",
+		office: "Department of the Interior and Local Government",
+		branch: "executive",
+		location: "national",
+		imageUrl: "/officials/benhur-abalos.jpg",
+		verified: true,
+		background:
+			"Former mayor of Mandaluyong and former MMDA chairman with experience in local governance.",
+		education:
+			"Graduated in Business Administration from De La Salle University.",
+		knownFor:
+			"Traffic management programs, local government coordination, and public safety initiatives.",
+	},
+	{
+		id: "joy-belmonte",
+		name: "Joy Belmonte",
+		role: "Mayor of Quezon City",
+		office: "Quezon City Hall",
+		branch: "local",
+		location: "metro-manila",
+		imageUrl: "/officials/joy-belmonte.jpg",
+		verified: true,
+		background:
+			"Former vice mayor who continued her family's involvement in public service.",
+		education:
+			"Graduated in Public Administration from University of the Philippines Diliman.",
+		knownFor:
+			"Environmental programs, women's welfare projects, and urban development initiatives.",
+	},
+	{
+		id: "vico-sotto",
+		name: "Vico Sotto",
+		role: "Mayor of Pasig",
+		office: "Pasig City Hall",
+		branch: "local",
+		location: "metro-manila",
+		imageUrl: "/officials/vico-sotto.jpg",
+		verified: true,
+		background:
+			"Young reform-oriented leader and son of actor-comedian Vic Sotto and actress Coney Reyes.",
+		education:
+			"Graduated in Political Science from Ateneo de Manila University.",
+		knownFor:
+			"Transparency, anti-corruption efforts, and modernization of local government services.",
+	},
+	{
+		id: "gwendolyn-garcia",
+		name: "Gwendolyn Garcia",
+		role: "Governor of Cebu",
+		office: "Cebu Provincial Capitol",
+		branch: "local",
 		location: "visayas",
-		imageUrl:
-			"https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=800&q=80",
+		imageUrl: "/officials/gwendolyn-garcia.jpg",
 		verified: true,
+		background:
+			"Veteran politician who has served multiple terms as Cebu governor and congresswoman.",
+		education: "Studied at University of San Carlos.",
+		knownFor:
+			"Tourism development, provincial infrastructure projects, and economic growth programs.",
 	},
 	{
-		id: "rafael-diaz",
-		name: "Rafael Diaz",
-		role: "Provincial Board Member",
-		office: "Davao del Sur",
+		id: "lani-mercado",
+		name: "Lani Mercado",
+		role: "Mayor of Bacoor",
+		office: "Bacoor City Hall",
 		branch: "local",
-		location: "mindanao",
-		imageUrl:
-			"https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80",
-		verified: false,
+		location: "metro-manila",
+		imageUrl: "/officials/lani-mercado.jpg",
+		verified: true,
+		background:
+			"Former actress and wife of Senator Bong Revilla Jr. who later entered politics.",
+		education: "Attended Colegio San Agustin-Bacolod.",
+		knownFor:
+			"Community outreach projects and local development programs in Bacoor.",
+	},
+	{
+		id: "nancy-binay",
+		name: "Nancy Binay",
+		role: "Senator",
+		office: "Senate of the Philippines",
+		branch: "legislative",
+		location: "national",
+		imageUrl: "/officials/nancy-binay.jpg",
+		verified: true,
+		background:
+			"Daughter of former Vice President Jejomar Binay and active in public service programs before entering the Senate.",
+		education: "Graduated from University of the Philippines Diliman.",
+		knownFor:
+			"Advocacy for tourism, education, and local business support.",
+	},
+	{
+		id: "ramon-revilla-jr",
+		name: "Ramon Revilla Jr.",
+		role: "Senator",
+		office: "Senate of the Philippines",
+		branch: "legislative",
+		location: "national",
+		imageUrl: "/officials/ramon-revilla-jr.png",
+		verified: true,
+		background:
+			"Former actor who transitioned into politics and served multiple terms in the Senate.",
+		education: "Studied at Far Eastern University.",
+		knownFor:
+			"Public service programs, entertainment industry influence, and social assistance initiatives.",
 	},
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
 	Dialog,
 	DialogContent,
@@ -21,9 +21,10 @@ import {
 	X,
 	Globe,
 	BadgeCheck,
+	Loader2,
 } from "lucide-react";
 import { Post, PostCategory } from "./feed-types";
-import { v4 as uuidv4 } from "uuid";
+import { createClient } from "@/lib/supabase/client";
 
 interface SourceLink {
 	id: string;
@@ -49,6 +50,59 @@ export function CreatePostModal({
 	const [linkInput, setLinkInput] = useState("");
 	const [sources, setSources] = useState<SourceLink[]>([]);
 	const [certified, setCertified] = useState(false);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [displayName, setDisplayName] = useState<string>("User");
+	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+	const [imagePreview, setImagePreview] = useState<string | null>(null);
+	const [imageUrl, setImageUrl] = useState<string | null>(null);
+	const [uploading, setUploading] = useState(false);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+	const initials = useMemo(() => {
+		const parts = displayName.trim().split(/\s+/).filter(Boolean);
+		if (parts.length === 0) return "U";
+		if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase();
+		return `${parts[0]!.slice(0, 1)}${parts[parts.length - 1]!.slice(0, 1)}`.toUpperCase();
+	}, [displayName]);
+
+	useEffect(() => {
+		let cancelled = false;
+		const supabase = createClient();
+		const run = async () => {
+			const { data } = await supabase.auth.getUser();
+			const user = data.user;
+			if (!user) return;
+
+			const meta =
+				typeof user.user_metadata === "object" && user.user_metadata !== null
+					? (user.user_metadata as Record<string, unknown>)
+					: {};
+			const metaDisplayName =
+				typeof meta.display_name === "string" ? meta.display_name : undefined;
+			const metaName = typeof meta.name === "string" ? meta.name : undefined;
+			const metaAvatarUrl =
+				typeof meta.avatar_url === "string" ? meta.avatar_url : undefined;
+
+			const { data: profile } = await supabase
+				.from("profiles")
+				.select("display_name, avatar_url")
+				.eq("id", user.id)
+				.single();
+
+			if (cancelled) return;
+			setDisplayName(
+				profile?.display_name ?? metaDisplayName ?? metaName ?? user.email ?? "User",
+			);
+			setAvatarUrl(
+				profile?.avatar_url ?? metaAvatarUrl ?? `https://i.pravatar.cc/150?u=${user.id}`,
+			);
+		};
+		run().catch(() => {
+			// ignore
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	// Reset form when modal opens
 	const handleOpenChange = (newOpen: boolean) => {
@@ -58,15 +112,74 @@ export function CreatePostModal({
 			setLinkInput("");
 			setCertified(false);
 			setSources([]);
+			setErrorMessage(null);
+			setImagePreview(null);
+			setImageUrl(null);
 		}
 		onOpenChange(newOpen);
+	};
+
+	const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+		const file = e.target.files?.[0];
+		if (!e.target.files) e.target.value = "";
+		if (!file) return;
+
+		const MAX_MB = 5;
+		if (file.size > MAX_MB * 1024 * 1024) {
+			setErrorMessage(`Image must be under ${MAX_MB} MB.`);
+			return;
+		}
+		if (!file.type.startsWith("image/")) {
+			setErrorMessage("Only image files are allowed.");
+			return;
+		}
+
+		setErrorMessage(null);
+		setImagePreview(URL.createObjectURL(file));
+		setUploading(true);
+
+		try {
+			const supabase = createClient();
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) throw new Error("Not authenticated");
+
+			const ext = file.name.split(".").pop() ?? "jpg";
+			const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+
+			const { error: uploadError } = await supabase.storage
+				.from("post-images")
+				.upload(path, file, { contentType: file.type, upsert: false });
+
+			if (uploadError) throw uploadError;
+
+			const { data: { publicUrl } } = supabase.storage
+				.from("post-images")
+				.getPublicUrl(path);
+
+			setImageUrl(publicUrl);
+		} catch (err) {
+			setErrorMessage(
+				err instanceof Error ? err.message : "Image upload failed.",
+			);
+			setImagePreview(null);
+			setImageUrl(null);
+		} finally {
+			setUploading(false);
+			if (fileInputRef.current) fileInputRef.current.value = "";
+		}
+	};
+
+	const removeImage = () => {
+		setImagePreview(null);
+		setImageUrl(null);
+		if (fileInputRef.current) fileInputRef.current.value = "";
 	};
 
 	const handleAddSource = () => {
 		if (!linkInput.trim()) return;
 		setSources([
 			...sources,
-			{ id: uuidv4(), title: linkInput, url: linkInput },
+			{ id: crypto.randomUUID(), title: linkInput, url: linkInput },
 		]);
 		setLinkInput("");
 	};
@@ -75,35 +188,65 @@ export function CreatePostModal({
 		setSources(sources.filter((s) => s.id !== id));
 	};
 
-	const handleSubmit = () => {
+	const handleSubmit = async () => {
 		if (!content.trim()) return;
+		if (intent === "CLAIM" && sources.length === 0) {
+			setErrorMessage("Claims require at least one source.");
+			return;
+		}
+		setErrorMessage(null);
 
-		const newPost: Post = {
-			id: uuidv4(),
-			author: {
-				id: "me",
-				name: "Dave Capistrano",
-				avatarUrl: "https://i.pravatar.cc/150?u=dave",
-			},
-			timeAgo: "Just now",
-			category: intent,
-			status: intent === "CLAIM" ? ["UNDER_REVIEW"] : [],
-			contentText: content,
-			stats: {
-				reactions: 0,
-				comments: 0,
-				shares: 0,
-				references: sources.length,
-			},
-		};
+		try {
+			const response = await fetch("/api/posts", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					category: intent as PostCategory,
+					contentText: content,
+					imageUrl: imageUrl ?? undefined,
+					sources: sources.map((s) => ({ title: s.title, url: s.url })),
+				}),
+			});
 
-		onSubmit(newPost);
-		onOpenChange(false);
+			if (!response.ok) {
+				const raw = await response.text();
+				let err: unknown = {};
+				try {
+					err = raw ? JSON.parse(raw) : {};
+				} catch {
+					err = {};
+				}
+				const fallbackMessage =
+					response.status === 401
+						? "Please sign in to create a post."
+						: response.status === 403
+							? "You do not have permission to create posts."
+							: "Failed to create post.";
+				setErrorMessage(
+					typeof (err as { error?: unknown })?.error === "string" &&
+							(err as { error: string }).error.trim()
+						? (err as { error: string }).error
+						: raw.trim()
+							? raw.trim()
+							: fallbackMessage,
+				);
+				console.error("Failed to create post", err);
+				return;
+			}
+
+			const data = (await response.json()) as { post?: Post };
+			if (data?.post) {
+				onSubmit(data.post);
+				onOpenChange(false);
+			}
+		} catch (e) {
+			console.error("Failed to create post", e);
+		}
 	};
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-800 text-zinc-100 p-0 sm:rounded-2xl my-4 sm:my-8">
+		<Dialog open={open} onOpenChange={handleOpenChange}>
+			<DialogContent aria-describedby={undefined} className="w-[95vw] sm:max-w-2xl md:max-w-3xl lg:max-w-4xl max-h-[90vh] overflow-y-auto bg-zinc-900 border-zinc-800 text-zinc-100 p-0 sm:rounded-2xl my-4 sm:my-8">
 				<div className="p-4 sm:p-6 md:p-8">
 					<DialogHeader className="mb-6 flex flex-row items-center justify-between">
 						<DialogTitle className="text-xl font-bold">Create Post</DialogTitle>
@@ -112,11 +255,11 @@ export function CreatePostModal({
 					{/* User Info */}
 					<div className="flex items-center gap-3 mb-6">
 						<Avatar className="w-12 h-12">
-							<AvatarImage src="https://i.pravatar.cc/150?u=dave" />
-							<AvatarFallback>DC</AvatarFallback>
+							<AvatarImage src={avatarUrl ?? undefined} alt={displayName} />
+							<AvatarFallback>{initials}</AvatarFallback>
 						</Avatar>
 						<div>
-							<div className="font-semibold text-zinc-100">Dave Capistrano</div>
+							<div className="font-semibold text-zinc-100">{displayName}</div>
 							<div className="flex items-center gap-1 text-xs text-zinc-400 bg-zinc-800/50 px-2 py-1 rounded-md mt-1 w-fit border border-zinc-800">
 								<Globe className="w-3 h-3" />
 								Publicly visible
@@ -155,8 +298,17 @@ export function CreatePostModal({
 						</button>
 					</div>
 
+					{/* Hidden file input */}
+					<input
+						ref={fileInputRef}
+						type="file"
+						accept="image/*"
+						className="hidden"
+						onChange={handleImageSelect}
+					/>
+
 					{/* Text Area */}
-					<div className="relative mb-6">
+					<div className="relative mb-4">
 						<Textarea
 							value={content}
 							onChange={(e) => setContent(e.target.value)}
@@ -167,10 +319,49 @@ export function CreatePostModal({
 							}
 							className="min-h-25 border-none text-xl resize-none placeholder:text-[#B484FF]/70 text-[#D0B2FF] focus-visible:ring-0 p-4 pr-12 rounded-xl bg-zinc-800/30"
 						/>
-						<div className="absolute right-4 top-4 text-emerald-500 hover:text-emerald-400 cursor-pointer">
-							<ImageIcon className="w-6 h-6" />
-						</div>
+						<button
+							type="button"
+							onClick={() => fileInputRef.current?.click()}
+							disabled={uploading}
+							className="absolute right-4 top-4 text-emerald-500 hover:text-emerald-400 disabled:opacity-50"
+						>
+							{uploading ? (
+								<Loader2 className="w-6 h-6 animate-spin" />
+							) : (
+								<ImageIcon className="w-6 h-6" />
+							)}
+						</button>
 					</div>
+
+					{/* Image preview */}
+					{imagePreview && (
+						<div className="relative mb-4 rounded-xl overflow-hidden border border-zinc-700">
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img
+								src={imagePreview}
+								alt="Post image preview"
+								className="w-full max-h-64 object-cover"
+							/>
+							<button
+								type="button"
+								onClick={removeImage}
+								className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1"
+							>
+								<X className="w-4 h-4" />
+							</button>
+							{uploading && (
+								<div className="absolute inset-0 bg-black/50 flex items-center justify-center gap-2 text-white text-sm">
+									<Loader2 className="w-5 h-5 animate-spin" />
+									Uploading…
+								</div>
+							)}
+							{imageUrl && !uploading && (
+								<div className="absolute bottom-2 right-2 bg-emerald-500/90 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full">
+									Uploaded
+								</div>
+							)}
+						</div>
+					)}
 
 					{/* Verified Source Badge */}
 					{intent === "CLAIM" && (
@@ -191,6 +382,12 @@ export function CreatePostModal({
 								<Link2 className="w-4 h-4 cursor-pointer hover:text-zinc-200" />
 							</div>
 						</div>
+
+						{errorMessage && (
+							<div className="mb-3 text-xs text-red-300 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-md">
+								{errorMessage}
+							</div>
+						)}
 
 						{sources.length > 0 && (
 							<div className="flex flex-col gap-2 mb-4">
@@ -272,7 +469,7 @@ export function CreatePostModal({
 					<div className="flex flex-col gap-3">
 						<Button
 							className="w-full bg-[#B484FF] hover:bg-[#A36DFF] text-white py-6 rounded-xl font-semibold text-lg"
-							disabled={!content.trim() || !certified}
+							disabled={!content.trim() || !certified || uploading}
 							onClick={handleSubmit}
 						>
 							Submit {intent === "CLAIM" ? "Claim" : "Opinion"}

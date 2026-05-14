@@ -4,11 +4,11 @@ import { createClient } from '@/lib/supabase/server'
 export async function POST() {
   const supabase = await createClient()
 
-  // Verify the user's session before attempting to sign out
+  
   const { data: { user } } = await supabase.auth.getUser()
 
   if (user) {
-    // This clears the session on the Supabase side
+    
     const { error } = await supabase.auth.signOut()
     
     if (error) {
@@ -16,6 +16,6 @@ export async function POST() {
     }
   }
 
-  // frontend will handle the redirect
+  
   return NextResponse.json({ message: 'Signed out successfully' })
 }
