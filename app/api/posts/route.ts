@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type {
 	Post,
 	PostCategory,
+	PostSource,
 	PostStatus,
 } from "@/components/main/feed/feed-types";
 
@@ -63,6 +64,23 @@ function mapDbPostToUi(row: unknown): Post | null {
 	const sourcesRaw = row.sources;
 	const sources = Array.isArray(sourcesRaw) ? sourcesRaw : [];
 	const referencesCount = sources.length;
+	const mappedSources = sources
+		.map((source): PostSource | null => {
+			if (!isRecord(source)) return null;
+			const sourceId = getString(source.id);
+			const title = getString(source.title);
+			const url = getString(source.url);
+			if (!sourceId || !title || !url) return null;
+			const isVerified =
+				typeof source.is_verified === "boolean" ? source.is_verified : undefined;
+			return {
+				id: sourceId,
+				title,
+				url,
+				...(typeof isVerified === "boolean" ? { isVerified } : {}),
+			};
+		})
+		.filter((source): source is PostSource => source !== null);
 
 	return {
 		id,
@@ -77,6 +95,7 @@ function mapDbPostToUi(row: unknown): Post | null {
 		image: imageUrl ?? undefined,
 		status: status.length ? status : undefined,
 		category,
+		sources: mappedSources.length ? mappedSources : undefined,
 		stats: {
 			reactions: reactionsCount,
 			comments: commentsCount,
@@ -87,7 +106,7 @@ function mapDbPostToUi(row: unknown): Post | null {
 }
 
 const postSelect =
-	"id, created_at, category, content, image_url, status, reactions_count, comments_count, shares_count, author:profiles!posts_author_id_fkey(id, display_name, avatar_url, role), sources:post_sources(id, title, url)";
+	"id, created_at, category, content, image_url, status, reactions_count, comments_count, shares_count, author:profiles!posts_author_id_fkey(id, display_name, avatar_url, role), sources:post_sources(id, title, url, is_verified)";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null;
@@ -108,6 +127,16 @@ function getSources(value: unknown): Array<{ title: string; url: string }> {
 			return { title, url };
 		})
 		.filter((x): x is { title: string; url: string } => x !== null);
+}
+
+function normalizeHost(url: string): string | null {
+	try {
+		const parsed = new URL(url);
+		const host = parsed.hostname.toLowerCase();
+		return host.startsWith("www.") ? host.slice(4) : host;
+	} catch {
+		return null;
+	}
 }
 
 export async function GET(request: Request) {
@@ -176,6 +205,12 @@ export async function POST(request: Request) {
 	if (!contentText || typeof contentText !== "string" || !contentText.trim()) {
 		return NextResponse.json({ error: "Content is required" }, { status: 400 });
 	}
+	if (category === "CLAIM" && sources.length === 0) {
+		return NextResponse.json(
+			{ error: "Claim posts require at least one source" },
+			{ status: 400 },
+		);
+	}
 
 	// Ensure the user has a profile row (trigger should create it, but this makes the API robust).
 	const fallbackName = user.email ? user.email.split("@")[0] : "User";
@@ -226,12 +261,39 @@ export async function POST(request: Request) {
 		.slice(0, 20);
 
 	if (normalizedSources.length > 0) {
+		const hostByUrl = new Map<string, string>();
+		const hosts = normalizedSources
+			.map((source) => {
+				const host = normalizeHost(source.url);
+				if (host) {
+					hostByUrl.set(source.url, host);
+				}
+				return host;
+			})
+			.filter((host): host is string => Boolean(host));
+
+		const { data: verifiedHosts } = await supabase
+			.from("verified_sources")
+			.select("host")
+			.in("host", hosts.length ? hosts : ["__none__"]);
+
+		const verifiedHostSet = new Set(
+			(verifiedHosts ?? [])
+				.map((row) => (isRecord(row) ? getString(row.host) : undefined))
+				.filter((host): host is string => Boolean(host)),
+		);
+
 		const { error: sourcesError } = await supabase.from("post_sources").insert(
-			normalizedSources.map((s) => ({
-				post_id: inserted.id,
-				title: s.title,
-				url: s.url,
-			})),
+			normalizedSources.map((source) => {
+				const host = hostByUrl.get(source.url) ?? null;
+				return {
+					post_id: inserted.id,
+					title: source.title,
+					url: source.url,
+					host,
+					is_verified: host ? verifiedHostSet.has(host) : false,
+				};
+			}),
 		);
 
 		if (sourcesError) {

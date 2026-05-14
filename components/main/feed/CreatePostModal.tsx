@@ -49,6 +49,7 @@ export function CreatePostModal({
 	const [linkInput, setLinkInput] = useState("");
 	const [sources, setSources] = useState<SourceLink[]>([]);
 	const [certified, setCertified] = useState(false);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
 	const [displayName, setDisplayName] = useState<string>("User");
 	const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 	const initials = useMemo(() => {
@@ -106,6 +107,7 @@ export function CreatePostModal({
 			setLinkInput("");
 			setCertified(false);
 			setSources([]);
+			setErrorMessage(null);
 		}
 		onOpenChange(newOpen);
 	};
@@ -125,6 +127,11 @@ export function CreatePostModal({
 
 	const handleSubmit = async () => {
 		if (!content.trim()) return;
+		if (intent === "CLAIM" && sources.length === 0) {
+			setErrorMessage("Claims require at least one source.");
+			return;
+		}
+		setErrorMessage(null);
 
 		try {
 			const response = await fetch("/api/posts", {
@@ -138,8 +145,27 @@ export function CreatePostModal({
 			});
 
 			if (!response.ok) {
-				// Keep UX minimal: just log. Feed will stay unchanged.
-				const err = await response.json().catch(() => ({}));
+				const raw = await response.text();
+				let err: unknown = {};
+				try {
+					err = raw ? JSON.parse(raw) : {};
+				} catch {
+					err = {};
+				}
+				const fallbackMessage =
+					response.status === 401
+						? "Please sign in to create a post."
+						: response.status === 403
+							? "You do not have permission to create posts."
+							: "Failed to create post.";
+				setErrorMessage(
+					typeof (err as { error?: unknown })?.error === "string" &&
+							(err as { error: string }).error.trim()
+						? (err as { error: string }).error
+						: raw.trim()
+							? raw.trim()
+							: fallbackMessage,
+				);
 				console.error("Failed to create post", err);
 				return;
 			}
@@ -244,6 +270,12 @@ export function CreatePostModal({
 								<Link2 className="w-4 h-4 cursor-pointer hover:text-zinc-200" />
 							</div>
 						</div>
+
+						{errorMessage && (
+							<div className="mb-3 text-xs text-red-300 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-md">
+								{errorMessage}
+							</div>
+						)}
 
 						{sources.length > 0 && (
 							<div className="flex flex-col gap-2 mb-4">

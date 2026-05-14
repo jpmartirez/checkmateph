@@ -8,6 +8,8 @@ import { MOCK_POSTS } from "@/components/main/feed/feed-data";
 import { CreatePostModal } from "@/components/main/feed/CreatePostModal";
 import { Post } from "@/components/main/feed/feed-types";
 import axios from "axios";
+import { createClient } from "@/lib/supabase/client";
+import { PostDetailOverlay } from "@/components/main/feed/PostDetailOverlay";
 
 const FeedPage = () => {
 	const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
@@ -15,6 +17,9 @@ const FeedPage = () => {
 	const [initialIntent, setInitialIntent] = useState<"OPINION" | "CLAIM">(
 		"CLAIM",
 	);
+	const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+	const [activePostId, setActivePostId] = useState<string | null>(null);
+	const [activePost, setActivePost] = useState<Post | null>(null);
 
 	useEffect(() => {
 		let isMounted = true;
@@ -34,6 +39,25 @@ const FeedPage = () => {
 		};
 	}, []);
 
+	useEffect(() => {
+		let cancelled = false;
+		const supabase = createClient();
+		const loadUser = async () => {
+			const { data } = await supabase.auth.getUser();
+			if (!cancelled) {
+				setCurrentUserId(data.user?.id ?? null);
+			}
+		};
+		loadUser().catch(() => {
+			if (!cancelled) {
+				setCurrentUserId(null);
+			}
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
 	const handleOpenModal = (intent: "OPINION" | "CLAIM" = "CLAIM") => {
 		setInitialIntent(intent);
 		setIsModalOpen(true);
@@ -41,6 +65,63 @@ const FeedPage = () => {
 
 	const handleCreatePost = (newPost: Post) => {
 		setPosts((prev) => [newPost, ...prev]);
+	};
+
+	const handleDeletePost = async (postId: string) => {
+		const confirmed = window.confirm("Delete this post?");
+		if (!confirmed) return;
+
+		try {
+			const response = await fetch(`/api/posts?id=${encodeURIComponent(postId)}`,
+				{
+					method: "DELETE",
+				},
+			);
+			if (!response.ok) {
+				const err = await response.json().catch(() => ({}));
+				console.error("Failed to delete post", err);
+				return;
+			}
+			setPosts((prev) => prev.filter((post) => post.id !== postId));
+		} catch (error) {
+			console.error("Failed to delete post", error);
+		}
+	};
+
+	const handleOpenDetails = (postId: string, post: Post) => {
+		setActivePostId(postId);
+		setActivePost(post);
+	};
+
+	const handleToggleLike = async (postId: string) => {
+		try {
+			const response = await fetch(`/api/posts/${postId}/reactions`, {
+				method: "POST",
+			});
+			if (!response.ok) {
+				const err = await response.json().catch(() => ({}));
+				console.error("Failed to toggle like", err);
+				return;
+			}
+			const data = (await response.json()) as { count?: number };
+			if (typeof data.count === "number") {
+				setPosts((prev) =>
+					prev.map((post) =>
+						post.id === postId
+							? {
+									...post,
+									stats: {
+										...post.stats,
+										reactions: data.count ?? post.stats.reactions,
+									},
+								}
+							: post,
+					),
+				);
+			}
+		} catch (error) {
+			console.error("Failed to toggle like", error);
+		}
 	};
 
 	return (
@@ -60,7 +141,14 @@ const FeedPage = () => {
 
 				<div className="flex flex-col gap-2">
 					{posts.map((post) => (
-						<PostCard key={post.id} post={post} />
+						<PostCard
+							key={post.id}
+							post={post}
+							currentUserId={currentUserId}
+							onDelete={handleDeletePost}
+							onLike={handleToggleLike}
+							onOpenDetails={(postId) => handleOpenDetails(postId, post)}
+						/>
 					))}
 				</div>
 			</div>
@@ -69,6 +157,16 @@ const FeedPage = () => {
 			<div className="hidden lg:block w-[320px]">
 				<RightSidebar />
 			</div>
+
+			<PostDetailOverlay
+				open={Boolean(activePostId)}
+				postId={activePostId}
+				initialPost={activePost}
+				onOpenChange={(open) => {
+					if (!open) setActivePostId(null);
+					if (!open) setActivePost(null);
+				}}
+			/>
 		</div>
 	);
 };

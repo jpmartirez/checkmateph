@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import {
 	Card,
@@ -8,6 +10,12 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
 	Globe,
 	MoreHorizontal,
@@ -33,7 +41,21 @@ const getStatusBadgeVariant = (status: string) => {
 	}
 };
 
-export const PostCard = ({ post }: { post: Post }) => {
+export const PostCard = ({
+	post,
+	currentUserId,
+	onDelete,
+	onLike,
+	onOpenDetails,
+}: {
+	post: Post;
+	currentUserId?: string | null;
+	onDelete?: (postId: string) => void;
+	onLike?: (postId: string) => void;
+	onOpenDetails?: (postId: string) => void;
+}) => {
+	const isAuthor = Boolean(currentUserId && post.author.id === currentUserId);
+
 	return (
 		<Card className="mb-6 bg-card border-border/50">
 			<CardHeader className="p-4 pb-2">
@@ -63,13 +85,29 @@ export const PostCard = ({ post }: { post: Post }) => {
 								{statusItem.replace("_", " ")}
 							</Badge>
 						))}
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-8 w-8 text-muted-foreground"
-						>
-							<MoreHorizontal className="w-4 h-4" />
-						</Button>
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="ghost"
+									size="icon"
+									className="h-8 w-8 text-muted-foreground"
+								>
+									<MoreHorizontal className="w-4 h-4" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="end">
+								{isAuthor ? (
+									<DropdownMenuItem
+										variant="destructive"
+										onClick={() => onDelete?.(post.id)}
+									>
+										Delete
+									</DropdownMenuItem>
+								) : (
+									<DropdownMenuItem disabled>No actions</DropdownMenuItem>
+								)}
+							</DropdownMenuContent>
+						</DropdownMenu>
 					</div>
 				</div>
 			</CardHeader>
@@ -89,6 +127,7 @@ export const PostCard = ({ post }: { post: Post }) => {
 						<Button
 							variant="link"
 							className="p-0 h-auto text-purple-400 text-xs font-semibold mt-1"
+							onClick={() => onOpenDetails?.(post.id)}
 						>
 							View Sources & References
 						</Button>
@@ -128,6 +167,7 @@ export const PostCard = ({ post }: { post: Post }) => {
 					<Button
 						variant="ghost"
 						className="flex-1 rounded-none text-muted-foreground hover:text-foreground"
+						onClick={() => onLike?.(post.id)}
 					>
 						<ThumbsUp className="w-4 h-4 mr-2" />
 						Like
@@ -135,6 +175,7 @@ export const PostCard = ({ post }: { post: Post }) => {
 					<Button
 						variant="ghost"
 						className="flex-1 rounded-none text-muted-foreground hover:text-foreground"
+						onClick={() => onOpenDetails?.(post.id)}
 					>
 						<MessageSquare className="w-4 h-4 mr-2" />
 						Comments

@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
 import {
 	Card,
 	CardContent,
@@ -10,8 +12,29 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { ShieldCheck } from "lucide-react";
 import { MOCK_EXPERTS } from "./feed-data";
+import type { Expert } from "./feed-types";
 
 export const RightSidebar = () => {
+	const [experts, setExperts] = useState<Expert[]>(MOCK_EXPERTS);
+
+	useEffect(() => {
+		let cancelled = false;
+		const loadExperts = async () => {
+			const response = await fetch("/api/experts");
+			if (!response.ok) return;
+			const data = (await response.json()) as { experts?: Expert[] };
+			if (!cancelled && Array.isArray(data.experts) && data.experts.length > 0) {
+				setExperts(data.experts);
+			}
+		};
+		loadExperts().catch(() => {
+			// Keep mock data on failure.
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
 	return (
 		<aside className="w-[320px] flex-shrink-0 flex flex-col gap-6 sticky top-20">
 			{/* Verified Experts Section */}
@@ -25,7 +48,7 @@ export const RightSidebar = () => {
 					</Button>
 				</CardHeader>
 				<CardContent className="p-4 pt-2 flex flex-col gap-4">
-					{MOCK_EXPERTS.map((expert) => (
+					{experts.map((expert) => (
 						<div key={expert.id} className="flex items-center justify-between">
 							<div className="flex items-center gap-3">
 								<Avatar className="h-9 w-9">
